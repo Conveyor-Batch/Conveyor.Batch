@@ -6,7 +6,9 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <LangVersion>latest</LangVersion>
-    <Authors>Conveyor.Batch Contributors</Authors>
+    <Authors>Conveyor-Batch</Authors>
+    <Owners>Conveyor-Batch</Owners>
+    <Company>Conveyor-Batch</Company>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/Conveyor-Batch/Conveyor.Batch</RepositoryUrl>
     <PackageProjectUrl>https://github.com/Conveyor-Batch/Conveyor.Batch</PackageProjectUrl>
