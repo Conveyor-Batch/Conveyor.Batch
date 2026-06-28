@@ -26,14 +26,14 @@ jobs:
           dotnet-version: ${{ matrix.dotnet }}
 
       - name: Restore
-        run: dotnet restore ConveyorBatch.sln
+        run: dotnet restore ConveyorBatch.slnx
 
       - name: Build
-        run: dotnet build ConveyorBatch.sln --no-restore --configuration Release
+        run: dotnet build ConveyorBatch.slnx --no-restore --configuration Release
 
       - name: Test
         run: >
-          dotnet test ConveyorBatch.sln
+          dotnet test ConveyorBatch.slnx
           --no-build
           --configuration Release
           --collect:"XPlat Code Coverage"
