@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Core abstractions and chunk-oriented batch processing engine for .NET 8+</Description>
+    <PackageTags>batch;processing;chunk;etl;dotnet</PackageTags>
+  </PropertyGroup>
+
+</Project>

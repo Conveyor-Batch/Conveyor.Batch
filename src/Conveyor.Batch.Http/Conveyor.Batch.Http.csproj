@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Paginated HTTP item reader for Conveyor.Batch</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Conveyor.Batch\Conveyor.Batch.csproj" />
+  </ItemGroup>
+
+</Project>

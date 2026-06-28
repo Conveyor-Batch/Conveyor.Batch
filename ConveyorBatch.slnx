@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Conveyor.Batch.EntityFrameworkCore/Conveyor.Batch.EntityFrameworkCore.csproj" />
+    <Project Path="src/Conveyor.Batch.Hosting/Conveyor.Batch.Hosting.csproj" />
+    <Project Path="src/Conveyor.Batch.Http/Conveyor.Batch.Http.csproj" />
+    <Project Path="src/Conveyor.Batch.IO/Conveyor.Batch.IO.csproj" />
+    <Project Path="src/Conveyor.Batch.Testing/Conveyor.Batch.Testing.csproj" />
+    <Project Path="src/Conveyor.Batch/Conveyor.Batch.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Conveyor.Batch.Benchmarks/Conveyor.Batch.Benchmarks.csproj" />
+    <Project Path="tests/Conveyor.Batch.IntegrationTests/Conveyor.Batch.IntegrationTests.csproj" />
+    <Project Path="tests/Conveyor.Batch.UnitTests/Conveyor.Batch.UnitTests.csproj" />
+  </Folder>
+</Solution>

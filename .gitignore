@@ -1,0 +1,14 @@
+## .NET
+*.user
+*.suo
+.vs/
+bin/
+obj/
+*.nupkg
+*.snupkg
+*.log
+TestResults/
+BenchmarkDotNet.Artifacts/
+.DS_Store
+Thumbs.db
+coverage/

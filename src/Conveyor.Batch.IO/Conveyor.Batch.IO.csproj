@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Flat-file, JSON, and XML item readers/writers for Conveyor.Batch</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Conveyor.Batch\Conveyor.Batch.csproj" />
+  </ItemGroup>
+
+</Project>

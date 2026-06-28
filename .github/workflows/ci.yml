@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    name: Build & Test (${{ matrix.os }} / .NET ${{ matrix.dotnet }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+        dotnet: [ '8.0.x', '9.0.x' ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET ${{ matrix.dotnet }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ matrix.dotnet }}
+
+      - name: Restore
+        run: dotnet restore ConveyorBatch.sln
+
+      - name: Build
+        run: dotnet build ConveyorBatch.sln --no-restore --configuration Release
+
+      - name: Test
+        run: >
+          dotnet test ConveyorBatch.sln
+          --no-build
+          --configuration Release
+          --collect:"XPlat Code Coverage"
+          --results-directory ./coverage
+          --logger "trx;LogFileName=test-results.trx"
+
+      - name: Upload coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.dotnet == '9.0.x'
+        uses: codecov/codecov-action@v4
+        with:
+          directory: ./coverage
+          fail_ci_if_error: false
