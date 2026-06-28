@@ -1,0 +1,29 @@
+name: Publish to NuGet
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    name: Pack & Push to NuGet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - name: Restore
+        run: dotnet restore ConveyorBatch.slnx
+      - name: Build
+        run: dotnet build ConveyorBatch.slnx --no-restore --configuration Release
+      - name: Pack
+        run: |
+          dotnet pack src/Conveyor.Batch/Conveyor.Batch.csproj --no-build --configuration Release --output ./nupkgs
+          dotnet pack src/Conveyor.Batch.EntityFrameworkCore/Conveyor.Batch.EntityFrameworkCore.csproj --no-build --configuration Release --output ./nupkgs
+          dotnet pack src/Conveyor.Batch.IO/Conveyor.Batch.IO.csproj --no-build --configuration Release --output ./nupkgs
+          dotnet pack src/Conveyor.Batch.Http/Conveyor.Batch.Http.csproj --no-build --configuration Release --output ./nupkgs
+          dotnet pack src/Conveyor.Batch.Hosting/Conveyor.Batch.Hosting.csproj --no-build --configuration Release --output ./nupkgs
+          dotnet pack src/Conveyor.Batch.Testing/Conveyor.Batch.Testing.csproj --no-build --configuration Release --output ./nupkgs
+      - name: Push to NuGet
+        run: dotnet nuget push ./nupkgs/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate

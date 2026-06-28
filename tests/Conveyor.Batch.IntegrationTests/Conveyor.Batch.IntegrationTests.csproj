@@ -2,6 +2,9 @@
 
   <PropertyGroup>
     <IsPackable>false</IsPackable>
+    <!-- SQLitePCLRaw.lib.e_sqlite3 is a transitive design-time dependency from EF Core SQLite;
+         no patched version is available. Suppress audit to allow restore. -->
+    <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
 
   <ItemGroup>

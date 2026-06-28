@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ ubuntu-latest, windows-latest, macos-latest ]
-        dotnet: [ '8.0.x', '9.0.x' ]
+        dotnet: [ '8.0.x', '9.0.x', '10.0.x' ]
 
     steps:
       - name: Checkout
@@ -32,16 +32,10 @@ jobs:
         run: dotnet build ConveyorBatch.slnx --no-restore --configuration Release
 
       - name: Test
-        run: >
-          dotnet test ConveyorBatch.slnx
-          --no-build
-          --configuration Release
-          --collect:"XPlat Code Coverage"
-          --results-directory ./coverage
-          --logger "trx;LogFileName=test-results.trx"
+        run: dotnet test ConveyorBatch.slnx --no-build --configuration Release --framework net${{ matrix.dotnet == '10.0.x' && '10.0' || matrix.dotnet == '9.0.x' && '9.0' || '8.0' }} --collect:"XPlat Code Coverage" --results-directory ./coverage --logger "trx;LogFileName=test-results.trx"
 
       - name: Upload coverage
-        if: matrix.os == 'ubuntu-latest' && matrix.dotnet == '9.0.x'
+        if: matrix.os == 'ubuntu-latest' && matrix.dotnet == '10.0.x'
         uses: codecov/codecov-action@v4
         with:
           directory: ./coverage

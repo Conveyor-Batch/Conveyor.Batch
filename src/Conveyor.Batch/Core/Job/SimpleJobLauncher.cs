@@ -3,20 +3,20 @@ using Conveyor.Batch.Abstractions;
 namespace Conveyor.Batch.Core.Job;
 
 /// <summary>
-/// A straightforward <see cref="IJobLauncher"/> that runs a job synchronously in the caller's context.
+/// Default implementation of <see cref="IJobLauncher"/> that executes jobs synchronously
+/// within the caller's context. Suitable for single-process and hosted scenarios.
 /// </summary>
 internal sealed class SimpleJobLauncher : IJobLauncher
 {
-    private readonly IJobRepository _repository;
+    private readonly IJobRepository _jobRepository;
 
     /// <summary>
-    /// Initializes a new <see cref="SimpleJobLauncher"/> with the given repository.
+    /// Initialises a new instance of <see cref="SimpleJobLauncher"/>.
     /// </summary>
-    /// <param name="repository">The job repository used to detect and prevent duplicate concurrent runs.</param>
-    public SimpleJobLauncher(IJobRepository repository)
+    /// <param name="jobRepository">The repository used to persist execution state.</param>
+    public SimpleJobLauncher(IJobRepository jobRepository)
     {
-        ArgumentNullException.ThrowIfNull(repository);
-        _repository = repository;
+        _jobRepository = jobRepository;
     }
 
     /// <inheritdoc />
@@ -27,13 +27,34 @@ internal sealed class SimpleJobLauncher : IJobLauncher
     {
         ArgumentNullException.ThrowIfNull(job);
 
-        var lastExecution = await _repository.GetLastJobExecutionAsync(job.Name, parameters).ConfigureAwait(false);
+        var instance = await _jobRepository.CreateJobInstanceAsync(job.Name, parameters).ConfigureAwait(false);
+        var execution = await _jobRepository.CreateJobExecutionAsync(instance, parameters).ConfigureAwait(false);
 
-        if (lastExecution is { Status: BatchStatus.Started })
-            throw new InvalidOperationException(
-                $"Job '{job.Name}' is already running with the given parameters. " +
-                "Stop the running instance before launching a new one.");
+        try
+        {
+            var result = await job.ExecuteAsync(parameters, cancellationToken).ConfigureAwait(false);
 
-        return await job.ExecuteAsync(parameters, cancellationToken).ConfigureAwait(false);
+            execution.Status = result.Status;
+            execution.EndTime = DateTimeOffset.UtcNow;
+        }
+        catch (OperationCanceledException)
+        {
+            execution.Status = BatchStatus.Stopped;
+            execution.EndTime = DateTimeOffset.UtcNow;
+            throw;
+        }
+        catch (Exception ex)
+        {
+            execution.Status = BatchStatus.Failed;
+            execution.EndTime = DateTimeOffset.UtcNow;
+            execution.FailureException = ex;
+            throw;
+        }
+        finally
+        {
+            await _jobRepository.UpdateJobExecutionAsync(execution).ConfigureAwait(false);
+        }
+
+        return execution;
     }
 }
