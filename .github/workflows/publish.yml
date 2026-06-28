@@ -35,5 +35,5 @@ jobs:
           dotnet pack src/Conveyor.Batch.Hosting/Conveyor.Batch.Hosting.csproj --no-build --configuration Release --output ./nupkgs
           dotnet pack src/Conveyor.Batch.Testing/Conveyor.Batch.Testing.csproj --no-build --configuration Release --output ./nupkgs
 
-      - name: Push to NuGet (Trusted Publishing)
-        run: dotnet nuget push ./nupkgs/*.nupkg --source https://api.nuget.org/v3/index.json --skip-duplicate
+      - name: Push to NuGet
+        run: dotnet nuget push ./nupkgs/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
