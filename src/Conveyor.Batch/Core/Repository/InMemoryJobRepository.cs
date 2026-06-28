@@ -9,7 +9,7 @@ namespace Conveyor.Batch.Core.Repository;
 /// Thread-safe in-memory implementation of <see cref="IJobRepository"/>.
 /// Suitable for testing and single-process scenarios without persistence.
 /// </summary>
-internal sealed class InMemoryJobRepository : IJobRepository
+public sealed class InMemoryJobRepository : IJobRepository
 {
     private long _instanceIdCounter;
     private long _executionIdCounter;
