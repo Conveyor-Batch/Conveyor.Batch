@@ -12,6 +12,7 @@
     <PackageProjectUrl>https://github.com/Conveyor-Batch/Conveyor.Batch</PackageProjectUrl>
     <Version>0.1.0-alpha.1</Version>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
     <PackageTags>batch;processing;chunk;etl;dotnet;spring-batch</PackageTags>
     <RepositoryType>git</RepositoryType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
@@ -19,5 +20,6 @@
   </PropertyGroup>
   <ItemGroup>
     <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="/" Condition="Exists('$(MSBuildThisFileDirectory)README.md')" />
+    <None Include="$(MSBuildThisFileDirectory)assets/icon.png" Pack="true" PackagePath="/" Condition="Exists('$(MSBuildThisFileDirectory)assets/icon.png')" />
   </ItemGroup>
 </Project>
