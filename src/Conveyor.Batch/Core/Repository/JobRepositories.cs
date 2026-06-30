@@ -1,7 +1,6 @@
 using Conveyor.Batch.Abstractions;
-using Conveyor.Batch.Core.Repository;
 
-namespace Conveyor.Batch;
+namespace Conveyor.Batch.Core.Repository;
 
 /// <summary>Factory methods for creating job repository instances.</summary>
 public static class JobRepositories

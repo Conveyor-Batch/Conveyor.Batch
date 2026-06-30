@@ -1,9 +1,8 @@
 using Conveyor.Batch.Abstractions;
 using Conveyor.Batch.Core.Engine;
 using Conveyor.Batch.Core.Job;
-using Conveyor.Batch.Core.Step;
 
-namespace Conveyor.Batch.Core;
+namespace Conveyor.Batch.Core.Step;
 
 /// <summary>
 /// Fluent builder for constructing a tasklet-based <see cref="IStep"/>.
