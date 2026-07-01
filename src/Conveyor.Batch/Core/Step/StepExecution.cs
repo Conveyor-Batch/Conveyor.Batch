@@ -1,3 +1,4 @@
+using Conveyor.Batch.Abstractions;
 using Conveyor.Batch.Core.Job;
 
 namespace Conveyor.Batch.Core.Step;
@@ -39,6 +40,12 @@ public sealed class StepExecution
 
     /// <summary>Gets or sets the exception that caused this step to fail, if any.</summary>
     public Exception? FailureException { get; set; }
+
+    /// <summary>Gets or sets the checkpoint state for this step execution, used to resume a restarted run.</summary>
+    public BatchExecutionContext ExecutionContext { get; set; } = new();
+
+    /// <summary>Gets or sets whether this step execution began as a resumption of a previous failed or stopped attempt.</summary>
+    public bool IsRestart { get; set; }
 
     internal void IncrementReadCount() => ReadCount++;
     internal void IncrementWriteCount(int count) => WriteCount += count;

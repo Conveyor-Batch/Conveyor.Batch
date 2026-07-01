@@ -105,6 +105,7 @@ public sealed class EfCoreJobRepository : IJobRepository
         entity.SkipCount = stepExecution.SkipCount;
         entity.RollbackCount = stepExecution.RollbackCount;
         entity.FailureMessage = stepExecution.FailureException?.Message;
+        entity.ExecutionContextJson = SerializeExecutionContext(stepExecution.ExecutionContext);
 
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
     }
@@ -145,6 +146,25 @@ public sealed class EfCoreJobRepository : IJobRepository
             .AsReadOnly();
     }
 
+    /// <inheritdoc />
+    public async Task<StepExecution?> GetLastStepExecutionAsync(long jobExecutionId, string stepName)
+    {
+        var entity = await _dbContext.StepExecutions
+            .Include(e => e.JobExecution).ThenInclude(je => je.JobInstance)
+            .Where(e => e.JobExecutionId == jobExecutionId && e.StepName == stepName)
+            .OrderByDescending(e => e.Id)
+            .FirstOrDefaultAsync()
+            .ConfigureAwait(false);
+
+        if (entity is null)
+            return null;
+
+        var parameters = DeserializeParameters(entity.JobExecution.ParametersJson);
+        var jobInstance = ToJobInstance(entity.JobExecution.JobInstance, parameters);
+        var jobExecution = ToJobExecution(entity.JobExecution, jobInstance, parameters);
+        return ToStepExecution(entity, jobExecution);
+    }
+
     // -------------------------------------------------------------------------
     // Mapping helpers
     // -------------------------------------------------------------------------
@@ -179,7 +199,8 @@ public sealed class EfCoreJobRepository : IJobRepository
             JobExecution = jobExecution,
             Status = Enum.Parse<BatchStatus>(entity.Status),
             StartTime = entity.StartTime,
-            EndTime = entity.EndTime
+            EndTime = entity.EndTime,
+            ExecutionContext = DeserializeExecutionContext(entity.ExecutionContextJson)
         };
 
     // -------------------------------------------------------------------------
@@ -196,5 +217,18 @@ public sealed class EfCoreJobRepository : IJobRepository
         var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(json, _jsonOptions)
                    ?? new Dictionary<string, string>();
         return new JobParameters(dict);
+    }
+
+    private static string SerializeExecutionContext(BatchExecutionContext context) =>
+        JsonSerializer.Serialize(context.ToDictionary(), _jsonOptions);
+
+    private static BatchExecutionContext DeserializeExecutionContext(string? json)
+    {
+        if (string.IsNullOrEmpty(json))
+            return new BatchExecutionContext();
+
+        var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(json, _jsonOptions)
+                   ?? new Dictionary<string, string>();
+        return BatchExecutionContext.FromDictionary(dict);
     }
 }

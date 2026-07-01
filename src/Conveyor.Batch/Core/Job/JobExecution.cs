@@ -25,4 +25,13 @@ public sealed class JobExecution
 
     /// <summary>Gets or sets the exception that caused this execution to fail, if any.</summary>
     public Exception? FailureException { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Id of the prior <see cref="JobExecution"/> this execution is resuming,
+    /// or <see langword="null"/> if this is a fresh (non-restart) run. This is an in-process-only
+    /// signal: it is produced and consumed entirely within a single job run (set once the new
+    /// execution is created, read immediately by each step as it starts), so it never needs to
+    /// survive a process boundary and is intentionally not persisted via <c>IJobRepository</c>.
+    /// </summary>
+    public long? RestartedFromExecutionId { get; set; }
 }

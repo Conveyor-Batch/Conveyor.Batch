@@ -24,5 +24,8 @@ public enum BatchStatus
     Abandoned,
 
     /// <summary>The execution failed.</summary>
-    Failed
+    Failed,
+
+    /// <summary>The execution began as a resumption of a previously failed or stopped execution.</summary>
+    Restarted
 }
