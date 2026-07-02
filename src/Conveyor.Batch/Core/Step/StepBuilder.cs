@@ -116,24 +116,43 @@ public sealed class StepBuilder<TInput, TOutput>
         if (_processor is null) throw new InvalidOperationException("A processor must be configured via Processor().");
         if (_writer is null) throw new InvalidOperationException("A writer must be configured via Writer().");
 
-        var engine = new ChunkOrientedEngine<TInput, TOutput>(
-            _reader, _processor, _writer, _chunkSize, _skipPolicy, _retryPolicy, _listener);
-
-        return new ChunkOrientedStep<TInput, TOutput>(name, engine, _repository);
+        return new ChunkOrientedStep<TInput, TOutput>(
+            name, _reader, _processor, _writer, _chunkSize, _skipPolicy, _retryPolicy, _listener, _repository);
     }
 }
 
 internal sealed class ChunkOrientedStep<TInput, TOutput> : IStep
 {
-    private readonly ChunkOrientedEngine<TInput, TOutput> _engine;
+    private readonly IItemReader<TInput> _reader;
+    private readonly IItemProcessor<TInput, TOutput> _processor;
+    private readonly IItemWriter<TOutput> _writer;
+    private readonly int _chunkSize;
+    private readonly ISkipPolicy? _skipPolicy;
+    private readonly IRetryPolicy? _retryPolicy;
+    private readonly IChunkListener? _listener;
     private readonly IJobRepository _repository;
 
     public string Name { get; }
 
-    internal ChunkOrientedStep(string name, ChunkOrientedEngine<TInput, TOutput> engine, IJobRepository repository)
+    internal ChunkOrientedStep(
+        string name,
+        IItemReader<TInput> reader,
+        IItemProcessor<TInput, TOutput> processor,
+        IItemWriter<TOutput> writer,
+        int chunkSize,
+        ISkipPolicy? skipPolicy,
+        IRetryPolicy? retryPolicy,
+        IChunkListener? listener,
+        IJobRepository repository)
     {
         Name = name;
-        _engine = engine;
+        _reader = reader;
+        _processor = processor;
+        _writer = writer;
+        _chunkSize = chunkSize;
+        _skipPolicy = skipPolicy;
+        _retryPolicy = retryPolicy;
+        _listener = listener;
         _repository = repository;
     }
 
@@ -141,14 +160,32 @@ internal sealed class ChunkOrientedStep<TInput, TOutput> : IStep
     public async Task<StepExecution> ExecuteAsync(JobExecution jobExecution, CancellationToken cancellationToken)
     {
         var stepExecution = await _repository.CreateStepExecutionAsync(jobExecution, Name).ConfigureAwait(false);
+
+        if (jobExecution.RestartedFromExecutionId is long previousJobExecutionId)
+        {
+            var previousStepExecution = await _repository
+                .GetLastStepExecutionAsync(previousJobExecutionId, Name)
+                .ConfigureAwait(false);
+
+            if (previousStepExecution is not null)
+            {
+                stepExecution.ExecutionContext = BatchExecutionContext.FromDictionary(
+                    new Dictionary<string, string>(previousStepExecution.ExecutionContext.ToDictionary()));
+                stepExecution.IsRestart = true;
+            }
+        }
+
         stepExecution.Status = BatchStatus.Started;
         await _repository.UpdateStepExecutionAsync(stepExecution).ConfigureAwait(false);
 
         var context = new StepExecutionContext(stepExecution);
+        var engine = new ChunkOrientedEngine<TInput, TOutput>(
+            _reader, _processor, _writer, _chunkSize, _skipPolicy, _retryPolicy, _listener,
+            jobRepository: _repository, stepExecution: stepExecution);
 
         try
         {
-            await _engine.ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
+            await engine.ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
             stepExecution.Status = BatchStatus.Completed;
         }
         catch (Exception ex)

@@ -31,4 +31,10 @@ public interface IJobRepository
 
     /// <summary>Returns all executions for the given job instance.</summary>
     Task<IReadOnlyList<JobExecution>> GetJobExecutionsAsync(JobInstance instance);
+
+    /// <summary>
+    /// Returns the step execution for the given job execution and step name,
+    /// or <see langword="null"/> if none exists.
+    /// </summary>
+    Task<StepExecution?> GetLastStepExecutionAsync(long jobExecutionId, string stepName);
 }

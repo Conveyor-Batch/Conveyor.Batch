@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Conveyor.Batch\Conveyor.Batch.csproj" />
+    <ProjectReference Include="..\..\src\Conveyor.Batch.IO\Conveyor.Batch.IO.csproj" />
   </ItemGroup>
 
   <ItemGroup>

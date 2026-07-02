@@ -61,10 +61,24 @@ internal sealed class SequentialJob : IJob
     /// <inheritdoc />
     public async Task<JobExecution> ExecuteAsync(JobParameters parameters, CancellationToken cancellationToken)
     {
+        var previousExecution = await _repository.GetLastJobExecutionAsync(Name, parameters).ConfigureAwait(false);
+
         var instance = await _repository.CreateJobInstanceAsync(Name, parameters).ConfigureAwait(false);
         var execution = await _repository.CreateJobExecutionAsync(instance, parameters).ConfigureAwait(false);
 
-        execution.Status = BatchStatus.Started;
+        bool isRestart = previousExecution is not null &&
+            (previousExecution.Status == BatchStatus.Failed || previousExecution.Status == BatchStatus.Stopped);
+
+        if (isRestart)
+        {
+            execution.RestartedFromExecutionId = previousExecution!.Id;
+            execution.Status = BatchStatus.Restarted;
+        }
+        else
+        {
+            execution.Status = BatchStatus.Started;
+        }
+
         await _repository.UpdateJobExecutionAsync(execution).ConfigureAwait(false);
 
         try

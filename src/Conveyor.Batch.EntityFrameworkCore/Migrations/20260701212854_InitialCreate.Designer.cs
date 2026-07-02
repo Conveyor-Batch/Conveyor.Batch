@@ -3,6 +3,7 @@ using System;
 using Conveyor.Batch.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Conveyor.Batch.EntityFrameworkCore.Migrations
 {
     [DbContext(typeof(ConveyorBatchDbContext))]
-    partial class ConveyorBatchDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260701212854_InitialCreate")]
+    partial class InitialCreate
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.6");
@@ -80,9 +83,6 @@ namespace Conveyor.Batch.EntityFrameworkCore.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTimeOffset?>("EndTime")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ExecutionContextJson")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("FailureMessage")

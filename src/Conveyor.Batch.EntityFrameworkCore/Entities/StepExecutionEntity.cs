@@ -43,4 +43,7 @@ public sealed class StepExecutionEntity
 
     /// <summary>Gets or sets the failure message if this step failed, or <see langword="null"/>.</summary>
     public string? FailureMessage { get; set; }
+
+    /// <summary>Gets or sets the serialized checkpoint state as a JSON object of string key/value pairs, or <see langword="null"/> if none has been recorded.</summary>
+    public string? ExecutionContextJson { get; set; }
 }

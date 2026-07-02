@@ -93,4 +93,14 @@ public sealed class InMemoryJobRepository : IJobRepository
             .ToList();
         return Task.FromResult(result);
     }
+
+    /// <inheritdoc />
+    public Task<StepExecution?> GetLastStepExecutionAsync(long jobExecutionId, string stepName)
+    {
+        var last = _stepExecutions.Values
+            .Where(s => s.JobExecution.Id == jobExecutionId && s.StepName == stepName)
+            .OrderByDescending(s => s.StartTime)
+            .FirstOrDefault();
+        return Task.FromResult(last);
+    }
 }
