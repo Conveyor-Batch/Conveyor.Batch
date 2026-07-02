@@ -51,4 +51,19 @@ public sealed class StepExecution
     internal void IncrementWriteCount(int count) => WriteCount += count;
     internal void IncrementSkipCount() => SkipCount++;
     internal void IncrementRollbackCount() => RollbackCount++;
+
+    /// <summary>
+    /// Copies the read/write/skip/rollback counts from <paramref name="other"/> onto this
+    /// instance. Used to transfer a worker step's final counts onto a separately-tracked
+    /// <see cref="StepExecution"/> (e.g. a partition's manager-persisted record) without
+    /// exposing the counters as generally settable.
+    /// </summary>
+    /// <param name="other">The step execution to copy counts from.</param>
+    internal void CopyCountersFrom(StepExecution other)
+    {
+        ReadCount = other.ReadCount;
+        WriteCount = other.WriteCount;
+        SkipCount = other.SkipCount;
+        RollbackCount = other.RollbackCount;
+    }
 }
