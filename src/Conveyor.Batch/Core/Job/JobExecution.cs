@@ -1,3 +1,5 @@
+using Conveyor.Batch.Abstractions;
+
 namespace Conveyor.Batch.Core.Job;
 
 /// <summary>
@@ -34,4 +36,12 @@ public sealed class JobExecution
     /// survive a process boundary and is intentionally not persisted via <c>IJobRepository</c>.
     /// </summary>
     public long? RestartedFromExecutionId { get; set; }
+
+    /// <summary>
+    /// Gets the execution context bag carrying partition-scoped state to a worker step.
+    /// This is an in-process-only signal (like <see cref="RestartedFromExecutionId"/>) —
+    /// never persisted via <c>IJobRepository</c>, only ever read by the worker that receives
+    /// this specific <see cref="JobExecution"/> instance.
+    /// </summary>
+    public BatchExecutionContext ExecutionContext { get; init; } = new();
 }
