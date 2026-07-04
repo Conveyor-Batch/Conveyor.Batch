@@ -18,6 +18,7 @@ public sealed class StepBuilder<TInput, TOutput>
     private IItemProcessor<TInput, TOutput>? _processor;
     private IItemWriter<TOutput>? _writer;
     private int _chunkSize = 10;
+    private int _degreeOfParallelism = 1;
     private ISkipPolicy? _skipPolicy;
     private IRetryPolicy? _retryPolicy;
     private IChunkListener? _listener;
@@ -72,6 +73,21 @@ public sealed class StepBuilder<TInput, TOutput>
         return this;
     }
 
+    /// <summary>
+    /// Sets the number of concurrent processor worker tasks. Defaults to 1 (sequential
+    /// processing via <see cref="ChunkOrientedEngine{TInput,TOutput}"/>). Values greater than 1
+    /// switch the built step to <see cref="ConcurrentChunkOrientedEngine{TInput,TOutput}"/>,
+    /// whose output order is not guaranteed — see that engine's XML docs for details.
+    /// </summary>
+    /// <param name="dop">The degree of parallelism; must be at least 1.</param>
+    /// <returns>This builder for chaining.</returns>
+    public StepBuilder<TInput, TOutput> DegreeOfParallelism(int dop)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(dop, 1);
+        _degreeOfParallelism = dop;
+        return this;
+    }
+
     /// <summary>Sets the skip policy applied to processing exceptions.</summary>
     /// <param name="policy">The skip policy.</param>
     /// <returns>This builder for chaining.</returns>
@@ -106,7 +122,11 @@ public sealed class StepBuilder<TInput, TOutput>
     /// Builds and returns the configured chunk-oriented <see cref="IStep"/>.
     /// </summary>
     /// <param name="name">The unique name of the step within its job.</param>
-    /// <returns>A new <see cref="IStep"/> backed by a <see cref="ChunkOrientedEngine{TInput,TOutput}"/>.</returns>
+    /// <returns>
+    /// A new <see cref="IStep"/> backed by a <see cref="ChunkOrientedEngine{TInput,TOutput}"/> when
+    /// <see cref="DegreeOfParallelism"/> is 1 (the default), or a
+    /// <see cref="ConcurrentChunkOrientedEngine{TInput,TOutput}"/> when it is greater than 1.
+    /// </returns>
     /// <exception cref="InvalidOperationException">Thrown if reader, processor, or writer is not configured.</exception>
     public IStep Build(string name)
     {
@@ -116,8 +136,12 @@ public sealed class StepBuilder<TInput, TOutput>
         if (_processor is null) throw new InvalidOperationException("A processor must be configured via Processor().");
         if (_writer is null) throw new InvalidOperationException("A writer must be configured via Writer().");
 
-        return new ChunkOrientedStep<TInput, TOutput>(
-            name, _reader, _processor, _writer, _chunkSize, _skipPolicy, _retryPolicy, _listener, _repository);
+        if (_degreeOfParallelism == 1)
+            return new ChunkOrientedStep<TInput, TOutput>(
+                name, _reader, _processor, _writer, _chunkSize, _skipPolicy, _retryPolicy, _listener, _repository);
+
+        return new ConcurrentChunkOrientedStep<TInput, TOutput>(
+            name, _reader, _processor, _writer, _chunkSize, _degreeOfParallelism, _skipPolicy, _retryPolicy, _listener, _repository);
     }
 }
 
@@ -182,6 +206,90 @@ internal sealed class ChunkOrientedStep<TInput, TOutput> : IStep
         var engine = new ChunkOrientedEngine<TInput, TOutput>(
             _reader, _processor, _writer, _chunkSize, _skipPolicy, _retryPolicy, _listener,
             jobRepository: _repository, stepExecution: stepExecution);
+
+        try
+        {
+            await engine.ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
+            stepExecution.Status = BatchStatus.Completed;
+        }
+        catch (Exception ex)
+        {
+            stepExecution.Status = BatchStatus.Failed;
+            stepExecution.FailureException = ex;
+        }
+        finally
+        {
+            stepExecution.EndTime = DateTimeOffset.UtcNow;
+            await _repository.UpdateStepExecutionAsync(stepExecution).ConfigureAwait(false);
+        }
+
+        return stepExecution;
+    }
+}
+
+internal sealed class ConcurrentChunkOrientedStep<TInput, TOutput> : IStep
+{
+    private readonly IItemReader<TInput> _reader;
+    private readonly IItemProcessor<TInput, TOutput> _processor;
+    private readonly IItemWriter<TOutput> _writer;
+    private readonly int _chunkSize;
+    private readonly int _degreeOfParallelism;
+    private readonly ISkipPolicy? _skipPolicy;
+    private readonly IRetryPolicy? _retryPolicy;
+    private readonly IChunkListener? _listener;
+    private readonly IJobRepository _repository;
+
+    public string Name { get; }
+
+    internal ConcurrentChunkOrientedStep(
+        string name,
+        IItemReader<TInput> reader,
+        IItemProcessor<TInput, TOutput> processor,
+        IItemWriter<TOutput> writer,
+        int chunkSize,
+        int degreeOfParallelism,
+        ISkipPolicy? skipPolicy,
+        IRetryPolicy? retryPolicy,
+        IChunkListener? listener,
+        IJobRepository repository)
+    {
+        Name = name;
+        _reader = reader;
+        _processor = processor;
+        _writer = writer;
+        _chunkSize = chunkSize;
+        _degreeOfParallelism = degreeOfParallelism;
+        _skipPolicy = skipPolicy;
+        _retryPolicy = retryPolicy;
+        _listener = listener;
+        _repository = repository;
+    }
+
+    /// <inheritdoc />
+    public async Task<StepExecution> ExecuteAsync(JobExecution jobExecution, CancellationToken cancellationToken)
+    {
+        var stepExecution = await _repository.CreateStepExecutionAsync(jobExecution, Name).ConfigureAwait(false);
+
+        if (jobExecution.RestartedFromExecutionId is long previousJobExecutionId)
+        {
+            var previousStepExecution = await _repository
+                .GetLastStepExecutionAsync(previousJobExecutionId, Name)
+                .ConfigureAwait(false);
+
+            if (previousStepExecution is not null)
+            {
+                stepExecution.ExecutionContext = BatchExecutionContext.FromDictionary(
+                    new Dictionary<string, string>(previousStepExecution.ExecutionContext.ToDictionary()));
+                stepExecution.IsRestart = true;
+            }
+        }
+
+        stepExecution.Status = BatchStatus.Started;
+        await _repository.UpdateStepExecutionAsync(stepExecution).ConfigureAwait(false);
+
+        var context = new StepExecutionContext(stepExecution);
+        var engine = new ConcurrentChunkOrientedEngine<TInput, TOutput>(
+            _reader, _processor, _writer, _chunkSize, _degreeOfParallelism, _skipPolicy, _retryPolicy, _listener);
 
         try
         {
