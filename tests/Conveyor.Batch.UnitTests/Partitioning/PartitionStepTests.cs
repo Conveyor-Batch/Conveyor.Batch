@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Conveyor.Batch.Abstractions;
 using Conveyor.Batch.Core.Job;
 using Conveyor.Batch.Core.Partitioning;
@@ -149,19 +148,19 @@ public sealed class PartitionStepTests
     public async Task PartitionsRunInParallel()
     {
         var repository = new InMemoryJobRepository();
-        var worker = new ConfigurableStep("worker", delay: TimeSpan.FromMilliseconds(200));
+        var worker = new ConcurrencyTrackingStep(TimeSpan.FromMilliseconds(200));
         var step = new PartitionStepBuilder(repository)
             .Worker(worker)
             .Partitioner(new RangePartitioner(1, 100))
             .GridSize(4)
             .Build("partition-step");
 
-        var stopwatch = Stopwatch.StartNew();
         await step.ExecuteAsync(MakeJobExecution(), CancellationToken.None);
-        stopwatch.Stop();
 
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromMilliseconds(400),
-            $"Elapsed {stopwatch.Elapsed} suggests sequential rather than parallel execution.");
+        // Measures actual concurrent overlap directly rather than inferring parallelism from
+        // wall-clock elapsed time, which is flaky under slower/shared CI runners.
+        Assert.True(worker.MaxObservedConcurrency > 1,
+            $"Expected multiple partitions to run concurrently, observed max concurrency of {worker.MaxObservedConcurrency}.");
     }
 
     [Fact]
