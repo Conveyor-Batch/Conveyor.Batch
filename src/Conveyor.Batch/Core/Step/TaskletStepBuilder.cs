@@ -1,6 +1,7 @@
 using Conveyor.Batch.Abstractions;
 using Conveyor.Batch.Core.Engine;
 using Conveyor.Batch.Core.Job;
+using Conveyor.Batch.Telemetry;
 
 namespace Conveyor.Batch.Core.Step;
 
@@ -66,7 +67,11 @@ internal sealed class TaskletStep : IStep
     /// <inheritdoc />
     public async Task<StepExecution> ExecuteAsync(JobExecution jobExecution, CancellationToken cancellationToken)
     {
+        var activity = ConveyorBatchTelemetry.ActivitySource.StartActivity(ConveyorBatchTelemetry.StepActivityName);
+        activity?.SetTag(ConveyorBatchTelemetry.StepNameTag, Name);
+
         var stepExecution = await _repository.CreateStepExecutionAsync(jobExecution, Name).ConfigureAwait(false);
+        activity?.SetTag(ConveyorBatchTelemetry.StepExecutionIdTag, stepExecution.Id);
         stepExecution.Status = BatchStatus.Started;
         await _repository.UpdateStepExecutionAsync(stepExecution).ConfigureAwait(false);
 
@@ -86,6 +91,8 @@ internal sealed class TaskletStep : IStep
         {
             stepExecution.EndTime = DateTimeOffset.UtcNow;
             await _repository.UpdateStepExecutionAsync(stepExecution).ConfigureAwait(false);
+            activity?.SetTag(ConveyorBatchTelemetry.StepStatusTag, stepExecution.Status.ToString());
+            activity?.Stop();
         }
 
         return stepExecution;
