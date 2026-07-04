@@ -46,6 +46,34 @@ public sealed class ConcurrentChunkOrientedEngineTests
         }
     }
 
+    /// <summary>
+    /// Directly measures how many items are processed concurrently, via entry/exit counting
+    /// around a delay, rather than inferring parallelism from wall-clock elapsed time — the
+    /// latter is sensitive to CI runner speed/load and produces a flaky test.
+    /// </summary>
+    private sealed class ConcurrencyTrackingProcessor<T>(int delayMs) : IItemProcessor<T, T>
+    {
+        private int _current;
+        private int _maxObserved;
+
+        public int MaxObservedConcurrency => _maxObserved;
+
+        public async ValueTask<T?> ProcessAsync(T item, StepExecutionContext ctx, CancellationToken ct)
+        {
+            var current = Interlocked.Increment(ref _current);
+            InterlockedMax(ref _maxObserved, current);
+            try
+            {
+                await Task.Delay(delayMs, ct).ConfigureAwait(false);
+                return item;
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _current);
+            }
+        }
+    }
+
     private sealed class ThrowOnPredicateProcessor<T>(Func<T, bool> shouldThrow, Func<Exception> exceptionFactory) : IItemProcessor<T, T>
     {
         public ValueTask<T?> ProcessAsync(T item, StepExecutionContext ctx, CancellationToken ct)
@@ -95,16 +123,16 @@ public sealed class ConcurrentChunkOrientedEngineTests
                 Interlocked.Decrement(ref _current);
             }
         }
+    }
 
-        private static void InterlockedMax(ref int target, int value)
+    private static void InterlockedMax(ref int target, int value)
+    {
+        int initial;
+        do
         {
-            int initial;
-            do
-            {
-                initial = target;
-                if (value <= initial) return;
-            } while (Interlocked.CompareExchange(ref target, value, initial) != initial);
-        }
+            initial = target;
+            if (value <= initial) return;
+        } while (Interlocked.CompareExchange(ref target, value, initial) != initial);
     }
 
     private sealed class AlwaysSkipPolicy : ISkipPolicy
@@ -144,19 +172,20 @@ public sealed class ConcurrentChunkOrientedEngineTests
     {
         var items = Enumerable.Range(1, 20).ToList();
         var writer = new CapturingWriter<int>();
+        var processor = new ConcurrencyTrackingProcessor<int>(50);
         var engine = new ConcurrentChunkOrientedEngine<int, int>(
             new ListReader<int>(items),
-            new DelayProcessor<int>(50),
+            processor,
             writer,
             chunkSize: 10,
             degreeOfParallelism: 4);
 
-        var stopwatch = Stopwatch.StartNew();
         await engine.ExecuteAsync(MakeContext(), CancellationToken.None);
-        stopwatch.Stop();
 
-        Assert.True(stopwatch.ElapsedMilliseconds < 400,
-            $"Expected parallel execution to finish in under 400ms, took {stopwatch.ElapsedMilliseconds}ms.");
+        // Measures actual concurrent overlap directly rather than inferring parallelism from
+        // wall-clock elapsed time, which is flaky under slower/shared CI runners.
+        Assert.True(processor.MaxObservedConcurrency > 1,
+            $"Expected multiple workers to process items concurrently, observed max concurrency of {processor.MaxObservedConcurrency}.");
         Assert.Equal(20, writer.Chunks.Sum(c => c.Count));
     }
 
