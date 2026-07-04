@@ -5,6 +5,7 @@ using Conveyor.Batch.Core.Processors;
 using Conveyor.Batch.Core.Writers;
 using Conveyor.Batch.Listeners;
 using Conveyor.Batch.Policies;
+using Conveyor.Batch.Telemetry;
 
 namespace Conveyor.Batch.Core.Step;
 
@@ -223,7 +224,11 @@ internal sealed class ChunkOrientedStep<TInput, TOutput> : IStep
     /// <inheritdoc />
     public async Task<StepExecution> ExecuteAsync(JobExecution jobExecution, CancellationToken cancellationToken)
     {
+        var activity = ConveyorBatchTelemetry.ActivitySource.StartActivity(ConveyorBatchTelemetry.StepActivityName);
+        activity?.SetTag(ConveyorBatchTelemetry.StepNameTag, Name);
+
         var stepExecution = await _repository.CreateStepExecutionAsync(jobExecution, Name).ConfigureAwait(false);
+        activity?.SetTag(ConveyorBatchTelemetry.StepExecutionIdTag, stepExecution.Id);
 
         if (jobExecution.RestartedFromExecutionId is long previousJobExecutionId)
         {
@@ -261,6 +266,8 @@ internal sealed class ChunkOrientedStep<TInput, TOutput> : IStep
         {
             stepExecution.EndTime = DateTimeOffset.UtcNow;
             await _repository.UpdateStepExecutionAsync(stepExecution).ConfigureAwait(false);
+            activity?.SetTag(ConveyorBatchTelemetry.StepStatusTag, stepExecution.Status.ToString());
+            activity?.Stop();
         }
 
         return stepExecution;
@@ -308,7 +315,11 @@ internal sealed class ConcurrentChunkOrientedStep<TInput, TOutput> : IStep
     /// <inheritdoc />
     public async Task<StepExecution> ExecuteAsync(JobExecution jobExecution, CancellationToken cancellationToken)
     {
+        var activity = ConveyorBatchTelemetry.ActivitySource.StartActivity(ConveyorBatchTelemetry.StepActivityName);
+        activity?.SetTag(ConveyorBatchTelemetry.StepNameTag, Name);
+
         var stepExecution = await _repository.CreateStepExecutionAsync(jobExecution, Name).ConfigureAwait(false);
+        activity?.SetTag(ConveyorBatchTelemetry.StepExecutionIdTag, stepExecution.Id);
 
         if (jobExecution.RestartedFromExecutionId is long previousJobExecutionId)
         {
@@ -345,6 +356,8 @@ internal sealed class ConcurrentChunkOrientedStep<TInput, TOutput> : IStep
         {
             stepExecution.EndTime = DateTimeOffset.UtcNow;
             await _repository.UpdateStepExecutionAsync(stepExecution).ConfigureAwait(false);
+            activity?.SetTag(ConveyorBatchTelemetry.StepStatusTag, stepExecution.Status.ToString());
+            activity?.Stop();
         }
 
         return stepExecution;

@@ -1,9 +1,11 @@
+using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using System.Threading.Channels;
 using Conveyor.Batch.Abstractions;
 using Conveyor.Batch.Core.Step;
 using Conveyor.Batch.Listeners;
 using Conveyor.Batch.Policies;
+using Conveyor.Batch.Telemetry;
 
 namespace Conveyor.Batch.Core.Engine;
 
@@ -283,18 +285,33 @@ public sealed class ConcurrentChunkOrientedEngine<TInput, TOutput>
 
     private async ValueTask CommitChunkAsync(List<TOutput> chunk, StepExecutionContext context, CancellationToken cancellationToken)
     {
-        IReadOnlyList<TOutput> committed = chunk.AsReadOnly();
+        var activity = ConveyorBatchTelemetry.ActivitySource.StartActivity(ConveyorBatchTelemetry.ChunkActivityName);
+        activity?.SetTag(ConveyorBatchTelemetry.ChunkSizeTag, chunk.Count);
+        activity?.SetTag(ConveyorBatchTelemetry.StepNameTag, context.StepName);
 
-        if (_listener is not null)
-            await _listener.BeforeWriteAsync(committed, context, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            IReadOnlyList<TOutput> committed = chunk.AsReadOnly();
 
-        await _writer.WriteAsync(committed, context, cancellationToken).ConfigureAwait(false);
-        context.IncrementWriteCount(chunk.Count);
+            if (_listener is not null)
+                await _listener.BeforeWriteAsync(committed, context, cancellationToken).ConfigureAwait(false);
 
-        if (_listener is not null)
-            await _listener.AfterWriteAsync(committed, context, cancellationToken).ConfigureAwait(false);
+            await _writer.WriteAsync(committed, context, cancellationToken).ConfigureAwait(false);
 
-        chunk.Clear();
+            var metricTags = new TagList { { ConveyorBatchTelemetry.StepNameTag, context.StepName } };
+            ConveyorBatchTelemetry.ChunksCommitted.Add(1, metricTags);
+            ConveyorBatchTelemetry.ChunkSize.Record(chunk.Count, metricTags);
+            context.IncrementWriteCount(chunk.Count);
+
+            if (_listener is not null)
+                await _listener.AfterWriteAsync(committed, context, cancellationToken).ConfigureAwait(false);
+
+            chunk.Clear();
+        }
+        finally
+        {
+            activity?.Stop();
+        }
     }
 
     private static Channel<T> CreateChannel<T>(int capacity, bool singleWriter, bool singleReader) =>
