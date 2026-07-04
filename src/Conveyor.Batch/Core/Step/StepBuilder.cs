@@ -1,6 +1,8 @@
 using Conveyor.Batch.Abstractions;
 using Conveyor.Batch.Core.Engine;
 using Conveyor.Batch.Core.Job;
+using Conveyor.Batch.Core.Processors;
+using Conveyor.Batch.Core.Writers;
 using Conveyor.Batch.Listeners;
 using Conveyor.Batch.Policies;
 
@@ -60,6 +62,44 @@ public sealed class StepBuilder<TInput, TOutput>
     {
         ArgumentNullException.ThrowIfNull(writer);
         _writer = writer;
+        return this;
+    }
+
+    /// <summary>
+    /// Replaces the configured processor with a <see cref="CompositeItemProcessor{T}"/> that
+    /// runs the given processors in sequence, short-circuiting to <see langword="null"/> if
+    /// any processor filters the item.
+    /// </summary>
+    /// <param name="processors">The processors to chain, in execution order.</param>
+    /// <returns>This builder for chaining.</returns>
+    /// <remarks>
+    /// Only valid when <typeparamref name="TInput"/> and <typeparamref name="TOutput"/> are the
+    /// same type, since the resulting composite processes <typeparamref name="TOutput"/> items
+    /// to <typeparamref name="TOutput"/> items.
+    /// </remarks>
+    /// <exception cref="ArgumentException">Thrown if <paramref name="processors"/> is empty.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown if <typeparamref name="TInput"/> and <typeparamref name="TOutput"/> are not the same type.
+    /// </exception>
+    public StepBuilder<TInput, TOutput> Processors(params IItemProcessor<TOutput, TOutput>[] processors)
+    {
+        var composite = new CompositeItemProcessor<TOutput>(processors);
+        _processor = composite as IItemProcessor<TInput, TOutput>
+            ?? throw new InvalidOperationException(
+                $"{nameof(Processors)}() is only valid when TInput and TOutput are the same type.");
+        return this;
+    }
+
+    /// <summary>
+    /// Replaces the configured writer with a <see cref="CompositeItemWriter{T}"/> that fans out
+    /// each committed chunk to all of the given writers, in sequence.
+    /// </summary>
+    /// <param name="writers">The writers to fan out to, in execution order.</param>
+    /// <returns>This builder for chaining.</returns>
+    /// <exception cref="ArgumentException">Thrown if <paramref name="writers"/> is empty.</exception>
+    public StepBuilder<TInput, TOutput> Writers(params IItemWriter<TOutput>[] writers)
+    {
+        _writer = new CompositeItemWriter<TOutput>(writers);
         return this;
     }
 
