@@ -68,6 +68,45 @@ public sealed class ChunkOrientedEngineTests
         public bool ShouldSkip(Exception exception, long skipCount) => skipCount < limit;
     }
 
+    /// <summary>
+    /// Retries the operation up to <paramref name="maxAttempts"/> times, re-throwing the
+    /// final failure. Mirrors how a Polly-backed <see cref="IRetryPolicy"/> adapter behaves.
+    /// </summary>
+    private sealed class CountingRetryPolicy(int maxAttempts) : IRetryPolicy
+    {
+        public int Attempts { get; private set; }
+
+        public async ValueTask ExecuteAsync(Func<CancellationToken, ValueTask> operation, CancellationToken cancellationToken)
+        {
+            for (var attempt = 1; ; attempt++)
+            {
+                Attempts = attempt;
+                try
+                {
+                    await operation(cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+                catch when (attempt < maxAttempts)
+                {
+                }
+            }
+        }
+    }
+
+    private sealed class FlakyProcessor<T>(int failCount, Exception exception) : IItemProcessor<T, T>
+    {
+        public int Calls { get; private set; }
+
+        public ValueTask<T?> ProcessAsync(T item, StepExecutionContext ctx, CancellationToken ct)
+        {
+            Calls++;
+            if (Calls <= failCount)
+                throw exception;
+
+            return ValueTask.FromResult<T?>(item);
+        }
+    }
+
     // ──────────────────────────────────────────────────────────────
     // Tests
     // ──────────────────────────────────────────────────────────────
@@ -153,6 +192,66 @@ public sealed class ChunkOrientedEngineTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             engine.ExecuteAsync(MakeContext(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task RetryPolicy_SucceedsAfterNRetries_ItemProcessedAndNotSkipped()
+    {
+        var processor = new FlakyProcessor<int>(failCount: 2, new InvalidOperationException("transient"));
+        var writer = new CapturingWriter<int>();
+        var context = MakeContext();
+        var engine = new ChunkOrientedEngine<int, int>(
+            new ListReader<int>([1]),
+            processor,
+            writer,
+            chunkSize: 10,
+            retryPolicy: new CountingRetryPolicy(maxAttempts: 3));
+
+        await engine.ExecuteAsync(context, CancellationToken.None);
+
+        Assert.Equal(3, processor.Calls);
+        Assert.Equal(0, context.SkipCount);
+        Assert.Equal([1], writer.Chunks.SelectMany(c => c));
+    }
+
+    [Fact]
+    public async Task RetryPolicy_ExhaustsRetryLimit_ExceptionPropagatesAndStepFails()
+    {
+        var processor = new FlakyProcessor<int>(failCount: int.MaxValue, new InvalidOperationException("always fails"));
+        var engine = new ChunkOrientedEngine<int, int>(
+            new ListReader<int>([1]),
+            processor,
+            new CapturingWriter<int>(),
+            chunkSize: 10,
+            retryPolicy: new CountingRetryPolicy(maxAttempts: 3));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            engine.ExecuteAsync(MakeContext(), CancellationToken.None));
+
+        Assert.Equal(3, processor.Calls);
+    }
+
+    [Fact]
+    public async Task RetryPolicy_ExhaustedThenSkipPolicyAllows_ItemSkippedAfterRetries()
+    {
+        var processor = new FlakyProcessor<int>(failCount: int.MaxValue, new InvalidOperationException("always fails"));
+        var writer = new CapturingWriter<int>();
+        var context = MakeContext();
+        var engine = new ChunkOrientedEngine<int, int>(
+            new ListReader<int>([1]),
+            processor,
+            writer,
+            chunkSize: 10,
+            skipPolicy: new AlwaysSkipPolicy(),
+            retryPolicy: new CountingRetryPolicy(maxAttempts: 3));
+
+        await engine.ExecuteAsync(context, CancellationToken.None);
+
+        // Retries are exhausted first (3 attempts), and only then does the skip policy
+        // kick in on the exception that finally propagates out of the retry policy.
+        Assert.Equal(3, processor.Calls);
+        Assert.Equal(1, context.SkipCount);
+        Assert.Empty(writer.Chunks);
     }
 
     [Fact]
