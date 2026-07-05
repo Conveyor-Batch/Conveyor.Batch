@@ -31,8 +31,24 @@ jobs:
       - name: Build
         run: dotnet build ConveyorBatch.slnx --no-restore --configuration Release
 
-      - name: Test
-        run: dotnet test ConveyorBatch.slnx --no-build --configuration Release --framework net${{ matrix.dotnet == '10.0.x' && '10.0' || matrix.dotnet == '9.0.x' && '9.0' || '8.0' }} --collect:"XPlat Code Coverage" --results-directory ./coverage --logger "trx;LogFileName=test-results.trx"
+      - name: Resolve target framework moniker
+        shell: bash
+        run: |
+          case "${{ matrix.dotnet }}" in
+            10.0.x) echo "TFM=net10.0" >> "$GITHUB_ENV" ;;
+            9.0.x) echo "TFM=net9.0" >> "$GITHUB_ENV" ;;
+            *) echo "TFM=net8.0" >> "$GITHUB_ENV" ;;
+          esac
+
+      - name: Test (Unit)
+        run: dotnet test tests/Conveyor.Batch.UnitTests --no-build --configuration Release --framework ${{ env.TFM }} --collect:"XPlat Code Coverage" --results-directory ./coverage/unit --logger "trx;LogFileName=unit-test-results.trx"
+
+      - name: Test (Integration)
+        run: dotnet test tests/Conveyor.Batch.IntegrationTests --no-build --configuration Release --framework ${{ env.TFM }} --collect:"XPlat Code Coverage" --results-directory ./coverage/integration --logger "trx;LogFileName=integration-test-results.trx"
+
+      - name: Enforce coverage threshold (Conveyor.Batch core)
+        shell: pwsh
+        run: ./scripts/check-coverage.ps1 -CoverageDirectory ./coverage/unit -PackageName "Conveyor.Batch" -Threshold 80
 
       - name: Upload coverage
         if: matrix.os == 'ubuntu-latest' && matrix.dotnet == '10.0.x'
