@@ -229,7 +229,7 @@ git clone https://github.com/Conveyor-Batch/Conveyor.Batch.git
 cd Conveyor.Batch
 
 dotnet build ConveyorBatch.slnx
-dotnet test ConveyorBatch.slnx --framework net9.0
+dotnet test ConveyorBatch.slnx --framework net10.0
 ```
 
 Run the getting-started sample:
