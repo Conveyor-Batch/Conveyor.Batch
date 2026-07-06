@@ -37,4 +37,17 @@ public interface IJobRepository
     /// or <see langword="null"/> if none exists.
     /// </summary>
     Task<StepExecution?> GetLastStepExecutionAsync(long jobExecutionId, string stepName);
+
+    /// <summary>
+    /// Returns the most recent execution that is currently in progress (status
+    /// <see cref="BatchStatus.Started"/>) for the given job name and parameters,
+    /// or <see langword="null"/> if none is currently running.
+    /// </summary>
+    /// <param name="jobName">The name of the job.</param>
+    /// <param name="parameters">The parameters identifying the execution to look for.</param>
+    /// <param name="cancellationToken">Token to cancel the lookup.</param>
+    Task<JobExecution?> GetRunningJobExecutionAsync(
+        string jobName,
+        JobParameters parameters,
+        CancellationToken cancellationToken = default);
 }

@@ -147,6 +147,30 @@ public sealed class EfCoreJobRepository : IJobRepository
     }
 
     /// <inheritdoc />
+    public async Task<JobExecution?> GetRunningJobExecutionAsync(
+        string jobName,
+        JobParameters parameters,
+        CancellationToken cancellationToken = default)
+    {
+        var parametersJson = SerializeParameters(parameters);
+
+        var executionEntity = await _dbContext.JobExecutions
+            .Include(e => e.JobInstance)
+            .Where(e => e.JobInstance.JobName == jobName
+                     && e.JobInstance.ParametersJson == parametersJson
+                     && e.Status == nameof(BatchStatus.Started))
+            .OrderByDescending(e => e.Id)
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (executionEntity is null)
+            return null;
+
+        var jobInstance = ToJobInstance(executionEntity.JobInstance, parameters);
+        return ToJobExecution(executionEntity, jobInstance, parameters);
+    }
+
+    /// <inheritdoc />
     public async Task<StepExecution?> GetLastStepExecutionAsync(long jobExecutionId, string stepName)
     {
         var entity = await _dbContext.StepExecutions
