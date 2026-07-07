@@ -78,7 +78,7 @@ public sealed class InMemoryJobRepository : IJobRepository
     public Task<JobExecution?> GetLastJobExecutionAsync(string jobName, JobParameters parameters)
     {
         var last = _executions.Values
-            .Where(e => e.JobInstance.JobName == jobName && e.JobInstance.Parameters == parameters)
+            .Where(e => e.JobInstance.JobName == jobName && e.JobInstance.Parameters.Equals(parameters))
             .OrderByDescending(e => e.StartTime)
             .FirstOrDefault();
         return Task.FromResult(last);
@@ -102,5 +102,20 @@ public sealed class InMemoryJobRepository : IJobRepository
             .OrderByDescending(s => s.StartTime)
             .FirstOrDefault();
         return Task.FromResult(last);
+    }
+
+    /// <inheritdoc />
+    public Task<JobExecution?> GetRunningJobExecutionAsync(
+        string jobName,
+        JobParameters parameters,
+        CancellationToken cancellationToken = default)
+    {
+        var running = _executions.Values
+            .Where(e => e.JobInstance.JobName == jobName
+                     && e.JobInstance.Parameters.Equals(parameters)
+                     && e.Status == BatchStatus.Started)
+            .OrderByDescending(e => e.StartTime)
+            .FirstOrDefault();
+        return Task.FromResult(running);
     }
 }

@@ -131,6 +131,10 @@ public sealed class RestartabilityTests
         public Task<JobExecution?> GetLastJobExecutionAsync(string jobName, JobParameters parameters) =>
             inner.GetLastJobExecutionAsync(jobName, parameters);
 
+        public Task<JobExecution?> GetRunningJobExecutionAsync(
+            string jobName, JobParameters parameters, CancellationToken cancellationToken = default) =>
+            inner.GetRunningJobExecutionAsync(jobName, parameters, cancellationToken);
+
         public Task<IReadOnlyList<JobExecution>> GetJobExecutionsAsync(JobInstance instance) =>
             inner.GetJobExecutionsAsync(instance);
 

@@ -25,6 +25,9 @@ public class ConveyorBatchDbContext : DbContext
     /// <summary>Gets the set of step execution records.</summary>
     public DbSet<StepExecutionEntity> StepExecutions => Set<StepExecutionEntity>();
 
+    /// <summary>Gets the set of job lock records used by <see cref="EfCoreJobLockProvider"/>.</summary>
+    public DbSet<JobLockEntity> JobLocks => Set<JobLockEntity>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -65,6 +68,18 @@ public class ConveyorBatchDbContext : DbContext
                   .HasForeignKey(e => e.JobExecutionId)
                   .OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(e => e.JobExecutionId);
+        });
+
+        modelBuilder.Entity<JobLockEntity>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.Property(e => e.JobName).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.ParametersJson).IsRequired();
+            entity.Property(e => e.LockToken).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.AcquiredAt).IsRequired();
+            entity.Property(e => e.ExpiresAt).IsRequired();
+            entity.HasIndex(e => new { e.JobName, e.ParametersJson }).IsUnique();
         });
     }
 }

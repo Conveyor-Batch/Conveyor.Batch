@@ -11,14 +11,20 @@ namespace Conveyor.Batch.Core.Job;
 internal sealed class SimpleJobLauncher : IJobLauncher
 {
     private readonly IJobRepository _jobRepository;
+    private readonly IJobLockProvider _lockProvider;
 
     /// <summary>
     /// Initialises a new instance of <see cref="SimpleJobLauncher"/>.
     /// </summary>
     /// <param name="jobRepository">The repository used to persist execution state.</param>
-    public SimpleJobLauncher(IJobRepository jobRepository)
+    /// <param name="lockProvider">
+    /// The cross-process lock provider guarding against concurrent execution of the same job
+    /// identity. Defaults to <see cref="NoOpJobLockProvider"/> for single-process deployments.
+    /// </param>
+    public SimpleJobLauncher(IJobRepository jobRepository, IJobLockProvider? lockProvider = null)
     {
         _jobRepository = jobRepository;
+        _lockProvider = lockProvider ?? NoOpJobLockProvider.Instance;
     }
 
     /// <inheritdoc />
@@ -29,8 +35,27 @@ internal sealed class SimpleJobLauncher : IJobLauncher
     {
         ArgumentNullException.ThrowIfNull(job);
 
+        var running = await _jobRepository
+            .GetRunningJobExecutionAsync(job.Name, parameters, cancellationToken)
+            .ConfigureAwait(false);
+        if (running is not null)
+            throw new InvalidOperationException(
+                $"Job '{job.Name}' with the given parameters is already running " +
+                $"(ExecutionId: {running.Id}). " +
+                $"Wait for it to complete or use different parameters.");
+
+        await using var jobLock = await _lockProvider
+            .TryAcquireAsync(job.Name, parameters, cancellationToken)
+            .ConfigureAwait(false);
+        if (!jobLock.IsAcquired)
+            throw new InvalidOperationException(
+                $"Could not acquire lock for job '{job.Name}'. " +
+                "Another process may be running this job.");
+
         var instance = await _jobRepository.CreateJobInstanceAsync(job.Name, parameters).ConfigureAwait(false);
         var execution = await _jobRepository.CreateJobExecutionAsync(instance, parameters).ConfigureAwait(false);
+        execution.Status = BatchStatus.Started;
+        await _jobRepository.UpdateJobExecutionAsync(execution).ConfigureAwait(false);
 
         var activity = ConveyorBatchTelemetry.ActivitySource.StartActivity(ConveyorBatchTelemetry.JobActivityName);
         activity?.SetTag(ConveyorBatchTelemetry.JobNameTag, job.Name);
