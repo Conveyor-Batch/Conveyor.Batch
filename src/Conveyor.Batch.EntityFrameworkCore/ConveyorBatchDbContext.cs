@@ -28,6 +28,9 @@ public class ConveyorBatchDbContext : DbContext
     /// <summary>Gets the set of job lock records used by <see cref="EfCoreJobLockProvider"/>.</summary>
     public DbSet<JobLockEntity> JobLocks => Set<JobLockEntity>();
 
+    /// <summary>Gets the set of dead-lettered entries for skipped items.</summary>
+    public DbSet<DeadLetterEntryEntity> DeadLetterEntries => Set<DeadLetterEntryEntity>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -80,6 +83,20 @@ public class ConveyorBatchDbContext : DbContext
             entity.Property(e => e.AcquiredAt).IsRequired();
             entity.Property(e => e.ExpiresAt).IsRequired();
             entity.HasIndex(e => new { e.JobName, e.ParametersJson }).IsUnique();
+        });
+
+        modelBuilder.Entity<DeadLetterEntryEntity>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.Property(e => e.JobName).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.StepName).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.ItemJson).IsRequired();
+            entity.Property(e => e.ItemTypeName).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.ExceptionType).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.ExceptionMessage).IsRequired();
+            entity.Property(e => e.OccurredAt).IsRequired();
+            entity.HasIndex(e => new { e.JobName, e.StepName });
         });
     }
 }

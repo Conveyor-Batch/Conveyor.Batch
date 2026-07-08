@@ -1,6 +1,7 @@
 using Conveyor.Batch.Abstractions;
 using Conveyor.Batch.Core.Engine;
 using Conveyor.Batch.Core.Job;
+using Conveyor.Batch.Core.Listeners;
 using Conveyor.Batch.Core.Processors;
 using Conveyor.Batch.Core.Writers;
 using Conveyor.Batch.Listeners;
@@ -156,6 +157,26 @@ public sealed class StepBuilder<TInput, TOutput>
     {
         ArgumentNullException.ThrowIfNull(listener);
         _listener = listener;
+        return this;
+    }
+
+    /// <summary>
+    /// Configures the step to dead-letter every skipped item to <paramref name="writer"/> via a
+    /// <see cref="DeadLetterChunkListener"/>. If a listener is already configured (via
+    /// <see cref="Listener(IChunkListener)"/> or a prior call to this method), it is combined
+    /// with the dead-letter listener using a <see cref="CompositeChunkListener"/> so both keep
+    /// receiving notifications. The dead-letter listener runs <em>first</em>, so a skipped item
+    /// is always captured even if a subsequently-invoked listener throws.
+    /// </summary>
+    /// <param name="writer">The sink that persists dead-lettered entries.</param>
+    /// <returns>This builder for chaining.</returns>
+    public StepBuilder<TInput, TOutput> DeadLetter(IDeadLetterWriter writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        var deadLetterListener = new DeadLetterChunkListener(writer);
+        _listener = _listener is null
+            ? deadLetterListener
+            : new CompositeChunkListener([deadLetterListener, _listener]);
         return this;
     }
 
