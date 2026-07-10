@@ -4,6 +4,7 @@ using Conveyor.Batch.Core.Job;
 using Conveyor.Batch.Core.Step;
 using Conveyor.Batch.EntityFrameworkCore;
 using Conveyor.Batch.Hosting;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -88,6 +89,11 @@ public sealed class HeartbeatEfCoreRepositoryTests : IDisposable
 
     public void Dispose()
     {
+        // Microsoft.Data.Sqlite pools native connections by connection string, so the file can
+        // still be held open on Windows even after every DbContext/scope above has been disposed
+        // — clear the pool first so the subsequent delete doesn't race a pooled handle.
+        SqliteConnection.ClearAllPools();
+
         if (File.Exists(_dbPath))
             File.Delete(_dbPath);
     }
