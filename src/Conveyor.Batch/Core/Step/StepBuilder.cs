@@ -26,6 +26,7 @@ public sealed class StepBuilder<TInput, TOutput>
     private ISkipPolicy? _skipPolicy;
     private IRetryPolicy? _retryPolicy;
     private IChunkListener? _listener;
+    private GracefulShutdownOptions? _gracefulShutdown;
 
     /// <summary>
     /// Initializes a new <see cref="StepBuilder{TInput,TOutput}"/> with the given repository.
@@ -181,6 +182,25 @@ public sealed class StepBuilder<TInput, TOutput>
     }
 
     /// <summary>
+    /// Configures the step to stop cleanly rather than abort mid-chunk when its
+    /// <see cref="CancellationToken"/> is cancelled (e.g. on SIGTERM via
+    /// <c>BatchJobHostedService</c>): the current item finishes processing, the current chunk is
+    /// committed, and a checkpoint is persisted before the step exits with
+    /// <see cref="Conveyor.Batch.Core.Job.BatchStatus.Stopped"/>. See
+    /// <see cref="GracefulShutdownOptions"/> for the drain-timeout behavior.
+    /// </summary>
+    /// <param name="options">
+    /// The graceful shutdown options, or <see langword="null"/> to use
+    /// <see cref="GracefulShutdownOptions.Default"/>.
+    /// </param>
+    /// <returns>This builder for chaining.</returns>
+    public StepBuilder<TInput, TOutput> GracefulShutdown(GracefulShutdownOptions? options = null)
+    {
+        _gracefulShutdown = options ?? GracefulShutdownOptions.Default;
+        return this;
+    }
+
+    /// <summary>
     /// Builds and returns the configured chunk-oriented <see cref="IStep"/>.
     /// </summary>
     /// <param name="name">The unique name of the step within its job.</param>
@@ -200,10 +220,10 @@ public sealed class StepBuilder<TInput, TOutput>
 
         if (_degreeOfParallelism == 1)
             return new ChunkOrientedStep<TInput, TOutput>(
-                name, _reader, _processor, _writer, _chunkSize, _skipPolicy, _retryPolicy, _listener, _repository);
+                name, _reader, _processor, _writer, _chunkSize, _skipPolicy, _retryPolicy, _listener, _repository, _gracefulShutdown);
 
         return new ConcurrentChunkOrientedStep<TInput, TOutput>(
-            name, _reader, _processor, _writer, _chunkSize, _degreeOfParallelism, _skipPolicy, _retryPolicy, _listener, _repository);
+            name, _reader, _processor, _writer, _chunkSize, _degreeOfParallelism, _skipPolicy, _retryPolicy, _listener, _repository, _gracefulShutdown);
     }
 }
 
@@ -217,6 +237,7 @@ internal sealed class ChunkOrientedStep<TInput, TOutput> : IStep
     private readonly IRetryPolicy? _retryPolicy;
     private readonly IChunkListener? _listener;
     private readonly IJobRepository _repository;
+    private readonly GracefulShutdownOptions? _gracefulShutdown;
 
     public string Name { get; }
 
@@ -229,7 +250,8 @@ internal sealed class ChunkOrientedStep<TInput, TOutput> : IStep
         ISkipPolicy? skipPolicy,
         IRetryPolicy? retryPolicy,
         IChunkListener? listener,
-        IJobRepository repository)
+        IJobRepository repository,
+        GracefulShutdownOptions? gracefulShutdown = null)
     {
         Name = name;
         _reader = reader;
@@ -240,6 +262,7 @@ internal sealed class ChunkOrientedStep<TInput, TOutput> : IStep
         _retryPolicy = retryPolicy;
         _listener = listener;
         _repository = repository;
+        _gracefulShutdown = gracefulShutdown;
     }
 
     /// <inheritdoc />
@@ -271,12 +294,13 @@ internal sealed class ChunkOrientedStep<TInput, TOutput> : IStep
         var context = new StepExecutionContext(stepExecution);
         var engine = new ChunkOrientedEngine<TInput, TOutput>(
             _reader, _processor, _writer, _chunkSize, _skipPolicy, _retryPolicy, _listener,
-            jobRepository: _repository, stepExecution: stepExecution);
+            jobRepository: _repository, stepExecution: stepExecution, gracefulShutdown: _gracefulShutdown);
 
         try
         {
             await engine.ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
-            stepExecution.Status = BatchStatus.Completed;
+            if (stepExecution.Status != BatchStatus.Stopped)
+                stepExecution.Status = BatchStatus.Completed;
         }
         catch (Exception ex)
         {
@@ -306,6 +330,7 @@ internal sealed class ConcurrentChunkOrientedStep<TInput, TOutput> : IStep
     private readonly IRetryPolicy? _retryPolicy;
     private readonly IChunkListener? _listener;
     private readonly IJobRepository _repository;
+    private readonly GracefulShutdownOptions? _gracefulShutdown;
 
     public string Name { get; }
 
@@ -319,7 +344,8 @@ internal sealed class ConcurrentChunkOrientedStep<TInput, TOutput> : IStep
         ISkipPolicy? skipPolicy,
         IRetryPolicy? retryPolicy,
         IChunkListener? listener,
-        IJobRepository repository)
+        IJobRepository repository,
+        GracefulShutdownOptions? gracefulShutdown = null)
     {
         Name = name;
         _reader = reader;
@@ -331,6 +357,7 @@ internal sealed class ConcurrentChunkOrientedStep<TInput, TOutput> : IStep
         _retryPolicy = retryPolicy;
         _listener = listener;
         _repository = repository;
+        _gracefulShutdown = gracefulShutdown;
     }
 
     /// <inheritdoc />
@@ -361,12 +388,14 @@ internal sealed class ConcurrentChunkOrientedStep<TInput, TOutput> : IStep
 
         var context = new StepExecutionContext(stepExecution);
         var engine = new ConcurrentChunkOrientedEngine<TInput, TOutput>(
-            _reader, _processor, _writer, _chunkSize, _degreeOfParallelism, _skipPolicy, _retryPolicy, _listener);
+            _reader, _processor, _writer, _chunkSize, _degreeOfParallelism, _skipPolicy, _retryPolicy, _listener,
+            gracefulShutdown: _gracefulShutdown);
 
         try
         {
             await engine.ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
-            stepExecution.Status = BatchStatus.Completed;
+            if (stepExecution.Status != BatchStatus.Stopped)
+                stepExecution.Status = BatchStatus.Completed;
         }
         catch (Exception ex)
         {

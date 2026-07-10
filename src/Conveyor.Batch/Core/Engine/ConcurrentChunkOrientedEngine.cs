@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using System.Threading.Channels;
 using Conveyor.Batch.Abstractions;
+using Conveyor.Batch.Core.Job;
 using Conveyor.Batch.Core.Step;
 using Conveyor.Batch.Listeners;
 using Conveyor.Batch.Policies;
@@ -51,6 +52,7 @@ public sealed class ConcurrentChunkOrientedEngine<TInput, TOutput>
     private readonly IChunkListener? _listener;
     private readonly int _inputChannelCapacity;
     private readonly int _outputChannelCapacity;
+    private readonly GracefulShutdownOptions? _gracefulShutdown;
 
     /// <summary>
     /// Initializes a new parallel chunk-oriented engine with required components and optional policies.
@@ -69,6 +71,17 @@ public sealed class ConcurrentChunkOrientedEngine<TInput, TOutput>
     /// <param name="outputChannelCapacity">
     /// The bounded capacity of the worker-to-assembler channel, or <c>0</c> for an unbounded channel.
     /// </param>
+    /// <param name="gracefulShutdown">
+    /// Optional graceful shutdown configuration. When set, the <see cref="CancellationToken"/>
+    /// passed to <see cref="ExecuteAsync"/> is treated as a "stop" signal: the producer stops
+    /// reading further items, while already-queued and in-flight items keep flowing through the
+    /// workers and the assembler, which commits the final partial chunk and returns with
+    /// <c>context.StepExecution.Status</c> set to <see cref="BatchStatus.Stopped"/>. An internal
+    /// abort deadline (<see cref="GracefulShutdownOptions.DrainTimeout"/>) starts once the stop
+    /// signal fires; if the drain does not complete in time, every stage is cancelled for real
+    /// and an <see cref="OperationCanceledException"/> propagates. When <see langword="null"/>
+    /// (the default), cancellation behaves exactly as before: every stage aborts immediately.
+    /// </param>
     /// <exception cref="ArgumentOutOfRangeException">
     /// Thrown if <paramref name="chunkSize"/> is less than 1, <paramref name="degreeOfParallelism"/>
     /// is less than 2, or either channel capacity is negative.
@@ -83,7 +96,8 @@ public sealed class ConcurrentChunkOrientedEngine<TInput, TOutput>
         IRetryPolicy? retryPolicy = null,
         IChunkListener? listener = null,
         int inputChannelCapacity = 0,
-        int outputChannelCapacity = 0)
+        int outputChannelCapacity = 0,
+        GracefulShutdownOptions? gracefulShutdown = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(chunkSize, 1);
         ArgumentOutOfRangeException.ThrowIfLessThan(degreeOfParallelism, 2);
@@ -100,13 +114,19 @@ public sealed class ConcurrentChunkOrientedEngine<TInput, TOutput>
         _listener = listener;
         _inputChannelCapacity = inputChannelCapacity;
         _outputChannelCapacity = outputChannelCapacity;
+        _gracefulShutdown = gracefulShutdown;
     }
 
     /// <summary>
     /// Executes the full parallel chunk-oriented processing pipeline for the given step context.
     /// </summary>
     /// <param name="context">The step execution context tracking counts and state.</param>
-    /// <param name="cancellationToken">Token to cancel the entire engine run.</param>
+    /// <param name="cancellationToken">
+    /// The stop token. With no <see cref="GracefulShutdownOptions"/> configured, cancelling this
+    /// token aborts every stage immediately. With graceful shutdown configured, cancelling this
+    /// token only stops the producer from reading further items — see the
+    /// <c>gracefulShutdown</c> constructor parameter.
+    /// </param>
     /// <exception cref="Exception">
     /// Whatever exception is thrown by the reader, processor, or writer propagates unwrapped
     /// (not as an <see cref="AggregateException"/>) — the first stage to fault wins, and every
@@ -117,31 +137,43 @@ public sealed class ConcurrentChunkOrientedEngine<TInput, TOutput>
         var stream = _reader as IItemStream;
         ExceptionDispatchInfo? firstFault = null;
 
+        using var internalCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var stoppingToken = internalCts.Token;
+
+        CancellationTokenSource? abortCts = null;
+        CancellationTokenRegistration drainRegistration = default;
+        var abortToken = stoppingToken;
+
+        if (_gracefulShutdown is not null)
+        {
+            abortCts = new CancellationTokenSource();
+            abortToken = abortCts.Token;
+            drainRegistration = cancellationToken.Register(() => abortCts.CancelAfter(_gracefulShutdown.DrainTimeout));
+        }
+
+        void ReportFault(Exception ex)
+        {
+            Interlocked.CompareExchange(ref firstFault, ExceptionDispatchInfo.Capture(ex), null);
+            internalCts.Cancel();
+            abortCts?.Cancel();
+        }
+
         try
         {
             if (stream is not null)
                 await stream.OpenAsync(context.StepExecution.ExecutionContext, cancellationToken).ConfigureAwait(false);
 
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            var token = linkedCts.Token;
-
-            void ReportFault(Exception ex)
-            {
-                Interlocked.CompareExchange(ref firstFault, ExceptionDispatchInfo.Capture(ex), null);
-                linkedCts.Cancel();
-            }
-
             var inputChannel = CreateChannel<TInput>(_inputChannelCapacity, singleWriter: true, singleReader: false);
             var outputChannel = CreateChannel<TOutput>(_outputChannelCapacity, singleWriter: false, singleReader: true);
 
-            var producerTask = RunProducerAsync(inputChannel.Writer, context, ReportFault, token);
+            var producerTask = RunProducerAsync(inputChannel.Writer, context, ReportFault, stoppingToken);
 
             var workerTasks = new Task[_degreeOfParallelism];
             for (var i = 0; i < _degreeOfParallelism; i++)
-                workerTasks[i] = RunWorkerAsync(inputChannel.Reader, outputChannel.Writer, context, ReportFault, token);
+                workerTasks[i] = RunWorkerAsync(inputChannel.Reader, outputChannel.Writer, context, ReportFault, abortToken);
 
             var outputCompletionTask = CompleteOutputWhenWorkersFinishAsync(workerTasks, outputChannel.Writer);
-            var assemblerTask = RunAssemblerAsync(outputChannel.Reader, context, ReportFault, token);
+            var assemblerTask = RunAssemblerAsync(outputChannel.Reader, context, ReportFault, abortToken);
 
             var allTasks = new List<Task>(_degreeOfParallelism + 3) { producerTask, outputCompletionTask, assemblerTask };
             allTasks.AddRange(workerTasks);
@@ -149,6 +181,10 @@ public sealed class ConcurrentChunkOrientedEngine<TInput, TOutput>
             try
             {
                 await Task.WhenAll(allTasks).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (_gracefulShutdown is not null && cancellationToken.IsCancellationRequested && !abortToken.IsCancellationRequested)
+            {
+                context.StepExecution.Status = BatchStatus.Stopped;
             }
             catch
             {
@@ -160,6 +196,9 @@ public sealed class ConcurrentChunkOrientedEngine<TInput, TOutput>
         }
         finally
         {
+            drainRegistration.Dispose();
+            abortCts?.Dispose();
+
             if (stream is not null)
                 await stream.CloseAsync(cancellationToken).ConfigureAwait(false);
         }

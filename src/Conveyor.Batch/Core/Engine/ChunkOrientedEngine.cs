@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Conveyor.Batch.Abstractions;
+using Conveyor.Batch.Core.Job;
 using Conveyor.Batch.Core.Step;
 using Conveyor.Batch.Listeners;
 using Conveyor.Batch.Policies;
@@ -21,6 +22,7 @@ public sealed class ChunkOrientedEngine<TInput, TOutput>
     private readonly IRetryPolicy? _retryPolicy;
     private readonly IChunkListener? _listener;
     private readonly IJobRepository? _jobRepository;
+    private readonly GracefulShutdownOptions? _gracefulShutdown;
 
     /// <summary>
     /// Initializes a new chunk-oriented engine with required components and optional policies.
@@ -43,6 +45,18 @@ public sealed class ChunkOrientedEngine<TInput, TOutput>
     /// pass the same <see cref="Conveyor.Batch.Core.Step.StepExecution"/> instance that the
     /// execution context wraps, so there is a single source of truth.
     /// </param>
+    /// <param name="gracefulShutdown">
+    /// Optional graceful shutdown configuration. When set, the <see cref="CancellationToken"/>
+    /// passed to <see cref="ExecuteAsync"/> is treated as a "stop" signal rather than a hard
+    /// abort: the engine stops reading further items but finishes processing and writing the
+    /// item(s) already read, commits the current chunk, and persists a checkpoint before
+    /// returning with <c>context.StepExecution.Status</c> set to
+    /// <see cref="BatchStatus.Stopped"/>. An internal abort deadline
+    /// (<see cref="GracefulShutdownOptions.DrainTimeout"/>) starts once the stop signal fires; if
+    /// the drain does not complete in time, the in-flight operation is cancelled for real and an
+    /// <see cref="OperationCanceledException"/> propagates. When <see langword="null"/> (the
+    /// default), cancellation behaves exactly as before: it aborts immediately, mid-item.
+    /// </param>
     public ChunkOrientedEngine(
         IItemReader<TInput> reader,
         IItemProcessor<TInput, TOutput> processor,
@@ -52,7 +66,8 @@ public sealed class ChunkOrientedEngine<TInput, TOutput>
         IRetryPolicy? retryPolicy = null,
         IChunkListener? listener = null,
         IJobRepository? jobRepository = null,
-        StepExecution? stepExecution = null)
+        StepExecution? stepExecution = null,
+        GracefulShutdownOptions? gracefulShutdown = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(chunkSize, 1);
         _reader = reader;
@@ -63,16 +78,35 @@ public sealed class ChunkOrientedEngine<TInput, TOutput>
         _retryPolicy = retryPolicy;
         _listener = listener;
         _jobRepository = jobRepository;
+        _gracefulShutdown = gracefulShutdown;
     }
 
     /// <summary>
     /// Executes the full chunk-oriented processing loop for the given step context.
     /// </summary>
     /// <param name="context">The step execution context tracking counts and state.</param>
-    /// <param name="cancellationToken">Token to cancel the entire engine run.</param>
+    /// <param name="cancellationToken">
+    /// The stop token. With no <see cref="GracefulShutdownOptions"/> configured, cancelling this
+    /// token aborts the run immediately, mid-item. With graceful shutdown configured, cancelling
+    /// this token stops the engine from reading further items but lets the item(s) already read
+    /// finish processing, writing, and checkpointing within the configured drain window — see the
+    /// <c>gracefulShutdown</c> constructor parameter.
+    /// </param>
     public async Task ExecuteAsync(StepExecutionContext context, CancellationToken cancellationToken)
     {
         var stream = _reader as IItemStream;
+        var stoppingToken = cancellationToken;
+        var abortToken = cancellationToken;
+
+        CancellationTokenSource? abortCts = null;
+        CancellationTokenRegistration drainRegistration = default;
+
+        if (_gracefulShutdown is not null)
+        {
+            abortCts = new CancellationTokenSource();
+            abortToken = abortCts.Token;
+            drainRegistration = cancellationToken.Register(() => abortCts.CancelAfter(_gracefulShutdown.DrainTimeout));
+        }
 
         try
         {
@@ -80,43 +114,59 @@ public sealed class ChunkOrientedEngine<TInput, TOutput>
                 await stream.OpenAsync(context.StepExecution.ExecutionContext, cancellationToken).ConfigureAwait(false);
 
             var chunk = new List<TOutput>(_chunkSize);
+            var stopped = false;
 
-            await foreach (var item in _reader.ReadAsync(context, cancellationToken).ConfigureAwait(false))
+            try
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                context.IncrementReadCount();
-
-                TOutput? processed;
-                try
+                await foreach (var item in _reader.ReadAsync(context, stoppingToken).WithCancellation(stoppingToken).ConfigureAwait(false))
                 {
-                    processed = await ProcessItemAsync(item, context, cancellationToken).ConfigureAwait(false);
-                }
-                catch (Exception ex) when (_skipPolicy?.ShouldSkip(ex, context.SkipCount) == true)
-                {
-                    context.IncrementSkipCount();
-                    if (_listener is not null)
-                        await _listener.OnSkipAsync(item, ex, context, cancellationToken).ConfigureAwait(false);
-                    continue;
-                }
+                    if (_gracefulShutdown is null)
+                        cancellationToken.ThrowIfCancellationRequested();
 
-                if (processed is not null)
-                    chunk.Add(processed);
+                    context.IncrementReadCount();
 
-                if (chunk.Count >= _chunkSize)
-                {
-                    await CommitChunkAsync(chunk, context, cancellationToken).ConfigureAwait(false);
-                    await CheckpointAsync(stream, context, cancellationToken).ConfigureAwait(false);
+                    TOutput? processed;
+                    try
+                    {
+                        processed = await ProcessItemAsync(item, context, abortToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (_skipPolicy?.ShouldSkip(ex, context.SkipCount) == true)
+                    {
+                        context.IncrementSkipCount();
+                        if (_listener is not null)
+                            await _listener.OnSkipAsync(item, ex, context, abortToken).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    if (processed is not null)
+                        chunk.Add(processed);
+
+                    if (chunk.Count >= _chunkSize)
+                    {
+                        await CommitChunkAsync(chunk, context, abortToken).ConfigureAwait(false);
+                        await CheckpointAsync(stream, context, abortToken).ConfigureAwait(false);
+                    }
                 }
+            }
+            catch (OperationCanceledException) when (_gracefulShutdown is not null && stoppingToken.IsCancellationRequested && !abortToken.IsCancellationRequested)
+            {
+                stopped = true;
             }
 
             if (chunk.Count > 0)
             {
-                await CommitChunkAsync(chunk, context, cancellationToken).ConfigureAwait(false);
-                await CheckpointAsync(stream, context, cancellationToken).ConfigureAwait(false);
+                await CommitChunkAsync(chunk, context, abortToken).ConfigureAwait(false);
+                await CheckpointAsync(stream, context, abortToken).ConfigureAwait(false);
             }
+
+            if (stopped)
+                context.StepExecution.Status = BatchStatus.Stopped;
         }
         finally
         {
+            drainRegistration.Dispose();
+            abortCts?.Dispose();
+
             if (stream is not null)
                 await stream.CloseAsync(cancellationToken).ConfigureAwait(false);
         }

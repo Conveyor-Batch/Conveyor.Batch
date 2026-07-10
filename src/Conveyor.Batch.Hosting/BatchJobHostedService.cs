@@ -19,6 +19,16 @@ public sealed class BatchJobHostedService : IHostedService
     private Task? _jobTask;
 
     /// <summary>
+    /// How long <see cref="StopAsync"/> waits for the running job to drain after signalling its
+    /// stop token before giving up and returning control to the host. Does not itself force-abort
+    /// the job — the actual drain deadline enforced against the engine is
+    /// <see cref="Conveyor.Batch.Core.Engine.GracefulShutdownOptions.DrainTimeout"/>, configured
+    /// per-step via <see cref="Conveyor.Batch.Core.Step.StepBuilder{TInput,TOutput}.GracefulShutdown"/>.
+    /// Default: 30 seconds.
+    /// </summary>
+    public TimeSpan ShutdownTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
     /// Initialises a new instance of <see cref="BatchJobHostedService"/>.
     /// </summary>
     /// <param name="jobLauncher">The launcher used to start the job.</param>
@@ -54,9 +64,11 @@ public sealed class BatchJobHostedService : IHostedService
     }
 
     /// <summary>
-    /// Cancels the running job and waits for it to complete.
+    /// Signals the running job's stop token and waits for it to drain, bounded by whichever of
+    /// <paramref name="cancellationToken"/> (the host's own shutdown deadline) or
+    /// <see cref="ShutdownTimeout"/> elapses first.
     /// </summary>
-    /// <param name="cancellationToken">Token signalled when the stop deadline is exceeded.</param>
+    /// <param name="cancellationToken">Token signalled when the host stop deadline is exceeded.</param>
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         if (_jobTask is null)
@@ -72,9 +84,18 @@ public sealed class BatchJobHostedService : IHostedService
         }
         finally
         {
-            // Await the job task, but abort if the host stop deadline is hit.
-            await Task.WhenAny(_jobTask, Task.Delay(Timeout.Infinite, cancellationToken))
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(ShutdownTimeout);
+
+            var completed = await Task.WhenAny(_jobTask, Task.Delay(Timeout.Infinite, timeoutCts.Token))
                 .ConfigureAwait(false);
+
+            if (completed == _jobTask)
+                _logger?.LogInformation("Batch job '{JobName}' stopped gracefully.", _job.Name);
+            else
+                _logger?.LogWarning(
+                    "Batch job '{JobName}' did not stop within the shutdown timeout of {ShutdownTimeout}.",
+                    _job.Name, ShutdownTimeout);
 
             _cts?.Dispose();
         }
