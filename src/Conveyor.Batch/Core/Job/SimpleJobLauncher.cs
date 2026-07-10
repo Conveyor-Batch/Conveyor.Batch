@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Conveyor.Batch.Abstractions;
 using Conveyor.Batch.Telemetry;
+using Microsoft.Extensions.Logging;
 
 namespace Conveyor.Batch.Core.Job;
 
@@ -12,6 +13,8 @@ internal sealed class SimpleJobLauncher : IJobLauncher
 {
     private readonly IJobRepository _jobRepository;
     private readonly IJobLockProvider _lockProvider;
+    private readonly HeartbeatOptions? _heartbeat;
+    private readonly ILogger<SimpleJobLauncher>? _logger;
 
     /// <summary>
     /// Initialises a new instance of <see cref="SimpleJobLauncher"/>.
@@ -21,10 +24,22 @@ internal sealed class SimpleJobLauncher : IJobLauncher
     /// The cross-process lock provider guarding against concurrent execution of the same job
     /// identity. Defaults to <see cref="NoOpJobLockProvider"/> for single-process deployments.
     /// </param>
-    public SimpleJobLauncher(IJobRepository jobRepository, IJobLockProvider? lockProvider = null)
+    /// <param name="heartbeat">
+    /// When supplied, periodically updates <see cref="JobExecution.LastHeartbeatAt"/> at
+    /// <see cref="HeartbeatOptions.Interval"/> for the duration of the run. Defaults to
+    /// <see langword="null"/> (heartbeat disabled).
+    /// </param>
+    /// <param name="logger">Optional logger used to report non-fatal heartbeat write failures.</param>
+    public SimpleJobLauncher(
+        IJobRepository jobRepository,
+        IJobLockProvider? lockProvider = null,
+        HeartbeatOptions? heartbeat = null,
+        ILogger<SimpleJobLauncher>? logger = null)
     {
         _jobRepository = jobRepository;
         _lockProvider = lockProvider ?? NoOpJobLockProvider.Instance;
+        _heartbeat = heartbeat;
+        _logger = logger;
     }
 
     /// <inheritdoc />
@@ -63,6 +78,17 @@ internal sealed class SimpleJobLauncher : IJobLauncher
 
         var stopwatch = Stopwatch.StartNew();
 
+        CancellationTokenSource? heartbeatCts = null;
+        Task? heartbeatTask = null;
+        if (_heartbeat is not null)
+        {
+            // Independent of the caller's cancellationToken: the heartbeat must keep beating
+            // (and must stop) based on the job's own lifetime, not on whether the caller ever
+            // requests cancellation.
+            heartbeatCts = new CancellationTokenSource();
+            heartbeatTask = RunHeartbeatLoopAsync(execution, _heartbeat.Interval, heartbeatCts.Token);
+        }
+
         try
         {
             var result = await job.ExecuteAsync(parameters, cancellationToken).ConfigureAwait(false);
@@ -86,6 +112,13 @@ internal sealed class SimpleJobLauncher : IJobLauncher
         }
         finally
         {
+            if (heartbeatCts is not null)
+            {
+                heartbeatCts.Cancel();
+                await heartbeatTask!.ConfigureAwait(false);
+                heartbeatCts.Dispose();
+            }
+
             stopwatch.Stop();
             await _jobRepository.UpdateJobExecutionAsync(execution).ConfigureAwait(false);
 
@@ -95,6 +128,29 @@ internal sealed class SimpleJobLauncher : IJobLauncher
         }
 
         return execution;
+    }
+
+    private async Task RunHeartbeatLoopAsync(JobExecution execution, TimeSpan interval, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            try
+            {
+                await Task.Delay(interval, cancellationToken).ConfigureAwait(false);
+                execution.LastHeartbeatAt = DateTimeOffset.UtcNow;
+                await _jobRepository.UpdateJobExecutionAsync(execution).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Heartbeat update failed for job execution {JobExecutionId}", execution.Id);
+                // Deliberately does not break/rethrow: a transient repository failure on one
+                // heartbeat tick must not kill the loop or abort the job — the next tick retries.
+            }
+        }
     }
 
     private static void RecordJobMetrics(string jobName, BatchStatus status, double elapsedMilliseconds)

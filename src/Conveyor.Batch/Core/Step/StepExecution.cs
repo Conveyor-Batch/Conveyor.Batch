@@ -90,4 +90,18 @@ public sealed class StepExecution
         _skipCount = other.SkipCount;
         _rollbackCount = other.RollbackCount;
     }
+
+    /// <summary>
+    /// Sets the read/write/skip/rollback counts directly. Used by a persistence layer to
+    /// rehydrate a <see cref="StepExecution"/>'s counters from previously-saved values (e.g. when
+    /// mapping a database entity back to a domain object) without exposing the counters as
+    /// generally settable.
+    /// </summary>
+    internal void RestoreCounters(long readCount, long writeCount, long skipCount, long rollbackCount)
+    {
+        _readCount = readCount;
+        _writeCount = writeCount;
+        _skipCount = skipCount;
+        _rollbackCount = rollbackCount;
+    }
 }

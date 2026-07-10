@@ -1,6 +1,9 @@
 <Solution>
   <Folder Name="/samples/">
+    <Project Path="samples/CsvToDatabase/CsvToDatabase.csproj" />
     <Project Path="samples/GettingStarted/GettingStarted.csproj" />
+    <Project Path="samples/PartitionedProcessing/PartitionedProcessing.csproj" />
+    <Project Path="samples/RestartableJob/RestartableJob.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Conveyor.Batch.EntityFrameworkCore/Conveyor.Batch.EntityFrameworkCore.csproj" />
