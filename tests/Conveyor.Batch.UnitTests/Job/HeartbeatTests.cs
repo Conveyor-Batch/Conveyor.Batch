@@ -129,9 +129,13 @@ public sealed class HeartbeatTests
         {
             ThrowOnCall = callNumber => callNumber == 2 // the first heartbeat tick (call #1 is the "Started" write)
         };
-        var launcher = new SimpleJobLauncher(spy, heartbeat: new HeartbeatOptions { Interval = TimeSpan.FromMilliseconds(50) });
+        // A wide margin between the interval and the job duration (~50 possible ticks here) so
+        // that Task.Delay scheduling jitter on a loaded CI runner can't eat the single required
+        // post-failure tick and produce a flaky failure — this was previously 50ms/400ms (~8
+        // possible ticks), which was tight enough that CI jitter occasionally consumed it all.
+        var launcher = new SimpleJobLauncher(spy, heartbeat: new HeartbeatOptions { Interval = TimeSpan.FromMilliseconds(30) });
 
-        var execution = await launcher.RunAsync(new DelayJob(400), JobParameters.Empty, CancellationToken.None);
+        var execution = await launcher.RunAsync(new DelayJob(1500), JobParameters.Empty, CancellationToken.None);
 
         Assert.Equal(BatchStatus.Completed, execution.Status);
         Assert.True(

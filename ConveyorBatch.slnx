@@ -7,6 +7,8 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Conveyor.Batch.EntityFrameworkCore/Conveyor.Batch.EntityFrameworkCore.csproj" />
+    <Project Path="src/Conveyor.Batch.EntityFrameworkCore.Migrations.Npgsql/Conveyor.Batch.EntityFrameworkCore.Migrations.Npgsql.csproj" />
+    <Project Path="src/Conveyor.Batch.EntityFrameworkCore.Migrations.SqlServer/Conveyor.Batch.EntityFrameworkCore.Migrations.SqlServer.csproj" />
     <Project Path="src/Conveyor.Batch.Hosting/Conveyor.Batch.Hosting.csproj" />
     <Project Path="src/Conveyor.Batch.Http/Conveyor.Batch.Http.csproj" />
     <Project Path="src/Conveyor.Batch.IO/Conveyor.Batch.IO.csproj" />

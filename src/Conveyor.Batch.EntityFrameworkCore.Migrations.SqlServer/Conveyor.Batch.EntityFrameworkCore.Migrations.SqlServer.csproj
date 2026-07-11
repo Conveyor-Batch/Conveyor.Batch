@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>SQL Server-specific EF Core migrations for Conveyor.Batch.EntityFrameworkCore. See ADR-005.</Description>
+    <!-- SQLitePCLRaw.lib.e_sqlite3 is a transitive design-time-only dependency pulled in via the
+         Conveyor.Batch.EntityFrameworkCore project reference; no patched version is available. -->
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Conveyor.Batch.EntityFrameworkCore\Conveyor.Batch.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.6" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.6">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>
