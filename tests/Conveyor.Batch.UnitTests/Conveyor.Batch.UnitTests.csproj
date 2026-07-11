@@ -2,10 +2,15 @@
 
   <PropertyGroup>
     <IsPackable>false</IsPackable>
+    <!-- Microsoft.Data.Sqlite pulls in SQLitePCLRaw.lib.e_sqlite3, which currently has no
+         patched release. Audit is disabled to allow restore (same rationale as the other
+         SQLite-referencing projects in this repo). -->
+    <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Conveyor.Batch\Conveyor.Batch.csproj" />
+    <ProjectReference Include="..\..\src\Conveyor.Batch.Dapper\Conveyor.Batch.Dapper.csproj" />
     <ProjectReference Include="..\..\src\Conveyor.Batch.IO\Conveyor.Batch.IO.csproj" />
   </ItemGroup>
 
@@ -15,6 +20,7 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="NSubstitute" Version="5.3.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.6" />
   </ItemGroup>
 
   <ItemGroup>

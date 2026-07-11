@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Dapper-backed item reader for Conveyor.Batch</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Conveyor.Batch\Conveyor.Batch.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" Version="2.*" />
+    <!-- Pinned to the repo's existing Conveyor.Batch 9.0.0 line (not the 8.* originally
+         requested) to avoid an NU1605 version-downgrade conflict. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+  </ItemGroup>
+
+</Project>
