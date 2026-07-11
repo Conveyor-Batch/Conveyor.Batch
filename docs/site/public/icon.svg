@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="60" fill="#4F46E5"/>
+
+  <!-- Conveyor belt body (rounded rectangle) -->
+  <rect x="18" y="52" width="92" height="24" rx="12" ry="12" fill="none" stroke="#E0E7FF" stroke-width="6"/>
+
+  <!-- Left roller -->
+  <circle cx="30" cy="64" r="12" fill="#6366F1" stroke="#E0E7FF" stroke-width="4"/>
+  <circle cx="30" cy="64" r="4" fill="#E0E7FF"/>
+
+  <!-- Right roller -->
+  <circle cx="98" cy="64" r="12" fill="#6366F1" stroke="#E0E7FF" stroke-width="4"/>
+  <circle cx="98" cy="64" r="4" fill="#E0E7FF"/>
+
+  <!-- Items on belt (three squares moving right) -->
+  <rect x="38" y="56" width="12" height="16" rx="2" fill="#A5B4FC"/>
+  <rect x="58" y="56" width="12" height="16" rx="2" fill="#C7D2FE"/>
+  <rect x="78" y="56" width="12" height="16" rx="2" fill="#A5B4FC"/>
+
+  <!-- Motion arrow -->
+  <polygon points="108,58 118,64 108,70" fill="#E0E7FF"/>
+</svg>
