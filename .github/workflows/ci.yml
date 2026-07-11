@@ -43,8 +43,21 @@ jobs:
       - name: Test (Unit)
         run: dotnet test tests/Conveyor.Batch.UnitTests --no-build --configuration Release --framework ${{ env.TFM }} --collect:"XPlat Code Coverage" --results-directory ./coverage/unit --logger "trx;LogFileName=unit-test-results.trx"
 
+      # Some integration tests spin up real PostgreSQL/SQL Server containers via Testcontainers
+      # and need a reachable Docker daemon. That's guaranteed on ubuntu-latest, so it runs the
+      # full suite; windows-latest/macos-latest runners aren't guaranteed to have one, so they
+      # run every other integration test but exclude the Docker-dependent ones via trait filter.
+      - name: Resolve integration test filter
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+            echo "INTEGRATION_FILTER=" >> "$GITHUB_ENV"
+          else
+            echo "INTEGRATION_FILTER=--filter Category!=RequiresDocker" >> "$GITHUB_ENV"
+          fi
+
       - name: Test (Integration)
-        run: dotnet test tests/Conveyor.Batch.IntegrationTests --no-build --configuration Release --framework ${{ env.TFM }} --collect:"XPlat Code Coverage" --results-directory ./coverage/integration --logger "trx;LogFileName=integration-test-results.trx"
+        run: dotnet test tests/Conveyor.Batch.IntegrationTests --no-build --configuration Release --framework ${{ env.TFM }} ${{ env.INTEGRATION_FILTER }} --collect:"XPlat Code Coverage" --results-directory ./coverage/integration --logger "trx;LogFileName=integration-test-results.trx"
 
       - name: Enforce coverage threshold (Conveyor.Batch core)
         shell: pwsh

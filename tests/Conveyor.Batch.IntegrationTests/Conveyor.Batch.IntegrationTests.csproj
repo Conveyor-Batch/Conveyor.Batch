@@ -10,7 +10,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Conveyor.Batch\Conveyor.Batch.csproj" />
     <ProjectReference Include="..\..\src\Conveyor.Batch.EntityFrameworkCore\Conveyor.Batch.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\src\Conveyor.Batch.EntityFrameworkCore.Migrations.Npgsql\Conveyor.Batch.EntityFrameworkCore.Migrations.Npgsql.csproj" />
+    <ProjectReference Include="..\..\src\Conveyor.Batch.EntityFrameworkCore.Migrations.SqlServer\Conveyor.Batch.EntityFrameworkCore.Migrations.SqlServer.csproj" />
     <ProjectReference Include="..\..\src\Conveyor.Batch.Hosting\Conveyor.Batch.Hosting.csproj" />
+    <ProjectReference Include="..\..\src\Conveyor.Batch.Testing\Conveyor.Batch.Testing.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -19,6 +22,18 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.6" />
+    <!-- Pinned to the repo's existing EF Core 9.0.6 line (not the 8.* originally requested) to
+         avoid an NU1605 version-downgrade conflict with the other EF Core 9.x packages already
+         referenced transitively. Testcontainers is pinned to its current 4.x line (3.* is no
+         longer published). -->
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.*" />
+    <PackageReference Include="Testcontainers.MsSql" Version="4.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.6">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.6" />
   </ItemGroup>
 
   <ItemGroup>

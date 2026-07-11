@@ -332,8 +332,20 @@ public sealed class EfCoreJobRepository : IJobRepository, IDisposable
 
     private static readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
 
-    private static string SerializeParameters(JobParameters parameters) =>
-        JsonSerializer.Serialize(parameters.Values, _jsonOptions);
+    /// <summary>
+    /// Serializes <paramref name="parameters"/> with keys in a canonical (ordinal-sorted) order.
+    /// <see cref="JobParameters.Equals(JobParameters)"/> is order-independent, but lookups here
+    /// (e.g. <see cref="GetLastJobExecutionAsync"/>) compare the persisted <c>ParametersJson</c>
+    /// column via a raw string equality in the SQL query — without canonicalizing key order
+    /// first, two parameter sets that are logically equal but were constructed with keys in a
+    /// different order would serialize to different strings and silently fail to match.
+    /// </summary>
+    private static string SerializeParameters(JobParameters parameters)
+    {
+        var values = parameters.Values ?? JobParameters.Empty.Values;
+        var ordered = values.OrderBy(kv => kv.Key, StringComparer.Ordinal).ToDictionary(kv => kv.Key, kv => kv.Value);
+        return JsonSerializer.Serialize(ordered, _jsonOptions);
+    }
 
     private static JobParameters DeserializeParameters(string json)
     {
