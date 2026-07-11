@@ -45,7 +45,7 @@ export default defineConfig({
             { text: 'Core', link: '/api/core' },
             { text: 'Repository', link: '/api/repository' },
             { text: 'IO', link: '/api/io' },
-            { text: 'Dapper (planned)', link: '/api/dapper' },
+            { text: 'Dapper', link: '/api/dapper' },
             { text: 'Testing', link: '/api/testing' },
           ],
         },
