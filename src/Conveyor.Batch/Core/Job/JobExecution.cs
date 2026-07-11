@@ -29,6 +29,13 @@ public sealed class JobExecution
     public Exception? FailureException { get; set; }
 
     /// <summary>
+    /// Gets or sets the UTC time at which this execution last reported a heartbeat, or
+    /// <see langword="null"/> if heartbeats are not configured for this run. Operators can alert
+    /// on "no heartbeat in N minutes" to detect stuck long-running jobs.
+    /// </summary>
+    public DateTimeOffset? LastHeartbeatAt { get; set; }
+
+    /// <summary>
     /// Gets or sets the Id of the prior <see cref="JobExecution"/> this execution is resuming,
     /// or <see langword="null"/> if this is a fresh (non-restart) run. This is an in-process-only
     /// signal: it is produced and consumed entirely within a single job run (set once the new

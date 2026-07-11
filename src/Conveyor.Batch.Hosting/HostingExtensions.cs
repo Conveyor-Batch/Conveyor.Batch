@@ -16,7 +16,7 @@ public static class HostingExtensions
     /// <param name="services">The service collection to add services to.</param>
     /// <returns>The same <see cref="IServiceCollection"/> for chaining.</returns>
     /// <remarks>
-    /// Ensure <see cref="ServiceCollectionExtensions.AddConveyorBatch(IServiceCollection)"/> has
+    /// Ensure <see cref="ServiceCollectionExtensions.AddConveyorBatch(IServiceCollection, Action{ConveyorBatchOptions})"/> has
     /// been called before this method so that <see cref="IJobLauncher"/> is registered.
     /// </remarks>
     public static IServiceCollection AddBatchJob<TJob>(this IServiceCollection services)
@@ -42,7 +42,7 @@ public static class HostingExtensions
     /// <param name="configure">Callback invoked with the constructed hosted service instance.</param>
     /// <returns>The same <see cref="IServiceCollection"/> for chaining.</returns>
     /// <remarks>
-    /// Ensure <see cref="ServiceCollectionExtensions.AddConveyorBatch(IServiceCollection)"/> has
+    /// Ensure <see cref="ServiceCollectionExtensions.AddConveyorBatch(IServiceCollection, Action{ConveyorBatchOptions})"/> has
     /// been called before this method so that <see cref="IJobLauncher"/> is registered.
     /// </remarks>
     public static IServiceCollection AddBatchJob<TJob>(

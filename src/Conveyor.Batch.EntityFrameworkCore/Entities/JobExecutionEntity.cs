@@ -34,6 +34,9 @@ public sealed class JobExecutionEntity
     /// <summary>Gets or sets the failure message if this execution failed, or <see langword="null"/>.</summary>
     public string? FailureMessage { get; set; }
 
+    /// <summary>Gets or sets the UTC time this execution last reported a heartbeat, or <see langword="null"/>.</summary>
+    public DateTimeOffset? LastHeartbeatAt { get; set; }
+
     /// <summary>Gets or sets the collection of step executions for this job execution.</summary>
     public ICollection<StepExecutionEntity> StepExecutions { get; set; } = new List<StepExecutionEntity>();
 }
