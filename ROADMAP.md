@@ -45,7 +45,7 @@ Comment with questions, concerns, or priorities.
 
 ---
 
-## Phase 2 — Beta `[In Progress: 0.1.0-beta.x]`
+## Phase 2 — Beta `[Complete]`
 
 **Goal:** Harden under community feedback. Close remaining production gaps.
 
@@ -62,16 +62,15 @@ Comment with questions, concerns, or priorities.
 - [x] Samples: CsvToDatabase, PartitionedProcessing, RestartableJob
 - [x] Integration test suite (Testcontainers — PostgreSQL + SQL Server)
 
-**Remaining:**
-- [ ] DapperItemReader
-- [ ] `dotnet batch` CLI tool (`Conveyor.Batch.Tools`)
-- [ ] Documentation site (VitePress on GitHub Pages)
+- [x] DapperItemReader (`Conveyor.Batch.Dapper`)
+- [x] `dotnet batch` CLI tool (`Conveyor.Batch.Tools`)
+- [x] Documentation site (VitePress on GitHub Pages)
 - [ ] GitHub Discussions open to community
 - [ ] Discord server
 
 ---
 
-## Phase 3 — RC & v1.0 `[Planned: Months 6–8]`
+## Phase 3 — RC & v1.0 `[In Progress]`
 
 **Goal:** API frozen. Production confidence. Stable release.
 
@@ -115,6 +114,7 @@ If you need something not listed, open a thread in
 
 | Date | Change |
 |---|---|
+| July 2026 | Phase 2 marked complete — `0.1.0-beta.4` ships Conveyor.Batch.Dapper, VitePress docs site, dotnet-batch CLI |
 | July 2026 | Phase 2 update: integration test suite (Testcontainers — PostgreSQL + SQL Server) shipped |
 | July 2026 | Phase 2 update: dead-lettering, distributed locking, graceful shutdown, heartbeat, JobParameters fix, XmlItemReader/Writer, 3 new samples all shipped — all originally planned for Phase 2–3 |
 | July 2026 | Phase 2 update: partitioning, ConcurrentChunkOrientedEngine, OpenTelemetry shipped |
@@ -123,4 +123,4 @@ If you need something not listed, open a thread in
 | July 2026 | Phase 0 marked complete |
 | June 2026 | Initial roadmap published |
 
-*Last updated: July 2026 — Phase 2 in progress (`0.1.0-beta.3`)*
+*Last updated: July 2026 — Phase 2 complete (`0.1.0-beta.4`), Phase 3 in progress*
