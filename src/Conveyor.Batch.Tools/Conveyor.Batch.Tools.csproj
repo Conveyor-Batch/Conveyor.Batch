@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- Directory.Build.props sets the plural TargetFrameworks for multi-TFM library projects;
+         tools package for a single TFM, so clear it and set the singular property instead —
+         otherwise dotnet pack builds/packs net8.0, net9.0, and net10.0 all at once. -->
+    <TargetFrameworks></TargetFrameworks>
+    <TargetFramework>net8.0</TargetFramework>
+    <Description>Command-line tool for inspecting and managing Conveyor.Batch job history</Description>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>dotnet-batch</ToolCommandName>
+    <!-- SQLitePCLRaw.lib.e_sqlite3 is a transitive dependency (direct + via
+         Conveyor.Batch.EntityFrameworkCore) with no patched release; same suppression
+         used by every other SQLite-touching project in this repo. -->
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Conveyor.Batch\Conveyor.Batch.csproj" />
+    <ProjectReference Include="..\Conveyor.Batch.EntityFrameworkCore\Conveyor.Batch.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" Version="2.0.9" />
+    <PackageReference Include="Spectre.Console" Version="0.57.2" />
+    <!-- Pinned to the repo's existing EF Core 9.0.x line (not the 8.* originally requested) to
+         avoid a provider/core version-skew risk with the 9.0.6 packages already referenced
+         transitively via Conveyor.Batch.EntityFrameworkCore — same reasoning already applied in
+         tests/Conveyor.Batch.IntegrationTests/Conveyor.Batch.IntegrationTests.csproj. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.6">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.6" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.6" />
+  </ItemGroup>
+
+</Project>

@@ -13,6 +13,7 @@
     <Project Path="src/Conveyor.Batch.Http/Conveyor.Batch.Http.csproj" />
     <Project Path="src/Conveyor.Batch.IO/Conveyor.Batch.IO.csproj" />
     <Project Path="src/Conveyor.Batch.Testing/Conveyor.Batch.Testing.csproj" />
+    <Project Path="src/Conveyor.Batch.Tools/Conveyor.Batch.Tools.csproj" />
     <Project Path="src/Conveyor.Batch/Conveyor.Batch.csproj" />
   </Folder>
   <Folder Name="/tests/">
