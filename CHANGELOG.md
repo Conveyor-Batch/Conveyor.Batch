@@ -11,6 +11,30 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.1.0-beta.5] — 2026-07
+
+### Changed (breaking — final API hardening before freeze)
+- **`IChunkListener`** — all six methods now have `default` implementations returning
+  `ValueTask.CompletedTask`. Implementers only need to override the callbacks they use.
+  The engine now fires all six: `BeforeChunkAsync` and `AfterChunkAsync` bracket each
+  committed chunk; `OnChunkErrorAsync` fires when the writer throws; `BeforeWriteAsync`,
+  `AfterWriteAsync`, and `OnSkipAsync` fire as before.
+- **`IJobExecutionListener`** + **`IStepExecutionListener`** — same treatment: both methods
+  on each interface now have `default` no-op implementations.
+- **`IJobRepository`** — all nine methods now accept `CancellationToken cancellationToken = default`
+  as their last parameter. The default value preserves source compatibility for existing callers;
+  implementations that talk to an external store (EF Core, etc.) propagate the token to every
+  underlying async call.
+- **`StepExecution`** — `Status`, `EndTime`, and `FailureException` setters are now
+  `internal set`. Readers, processors, and writers can no longer write execution state
+  through `StepExecutionContext.StepExecution`.
+
+### Infrastructure
+- New unit tests covering `BeforeChunkAsync` / `AfterChunkAsync` / `OnChunkErrorAsync` on
+  both `ChunkOrientedEngine` and `ConcurrentChunkOrientedEngine`.
+
+---
+
 ## [0.1.0-beta.4] — 2026-07-11
 
 ### Added
@@ -130,7 +154,8 @@ Initial pre-release. Establishes the full public API surface and package structu
 - **`GettingStarted` sample** — verified on CI.
 - OSS hygiene: MIT license, CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md.
 
-[Unreleased]: https://github.com/Conveyor-Batch/Conveyor.Batch/compare/v0.1.0-beta.4...HEAD
+[Unreleased]: https://github.com/Conveyor-Batch/Conveyor.Batch/compare/v0.1.0-beta.5...HEAD
+[0.1.0-beta.5]: https://github.com/Conveyor-Batch/Conveyor.Batch/compare/v0.1.0-beta.4...v0.1.0-beta.5
 [0.1.0-beta.4]: https://github.com/Conveyor-Batch/Conveyor.Batch/compare/0.1.0-beta.3...v0.1.0-beta.4
 [0.1.0-beta.3]: https://github.com/Conveyor-Batch/Conveyor.Batch/compare/v0.1.0-beta.2...0.1.0-beta.3
 [0.1.0-beta.2]: https://github.com/Conveyor-Batch/Conveyor.Batch/compare/v0.1.0-alpha.1...v0.1.0-beta.2

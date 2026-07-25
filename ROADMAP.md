@@ -74,7 +74,7 @@ Comment with questions, concerns, or priorities.
 
 **Goal:** API frozen. Production confidence. Stable release.
 
-- [ ] API freeze + semantic versioning policy published
+- [x] API freeze + semantic versioning policy published (`0.1.0-beta.5`)
 - [ ] BenchmarkDotNet performance suite (full regression baseline)
 - [ ] Bulk write optimization (TVP for SQL Server, COPY for PostgreSQL)
 - [ ] Chaos testing suite
@@ -114,6 +114,7 @@ If you need something not listed, open a thread in
 
 | Date | Change |
 |---|---|
+| July 2026 | Phase 3: API frozen — `0.1.0-beta.5` ships listener defaults, `IJobRepository` CancellationToken, `StepExecution` encapsulation |
 | July 2026 | Phase 2 marked complete — `0.1.0-beta.4` ships Conveyor.Batch.Dapper, VitePress docs site, dotnet-batch CLI |
 | July 2026 | Phase 2 update: integration test suite (Testcontainers — PostgreSQL + SQL Server) shipped |
 | July 2026 | Phase 2 update: dead-lettering, distributed locking, graceful shutdown, heartbeat, JobParameters fix, XmlItemReader/Writer, 3 new samples all shipped — all originally planned for Phase 2–3 |
@@ -123,4 +124,4 @@ If you need something not listed, open a thread in
 | July 2026 | Phase 0 marked complete |
 | June 2026 | Initial roadmap published |
 
-*Last updated: July 2026 — Phase 2 complete (`0.1.0-beta.4`), Phase 3 in progress*
+*Last updated: July 2026 — Phase 3 in progress (`0.1.0-beta.5`), public API frozen*
