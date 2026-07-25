@@ -20,7 +20,7 @@ public sealed class InMemoryJobRepository : IJobRepository
     private readonly ConcurrentDictionary<long, StepExecution> _stepExecutions = new();
 
     /// <inheritdoc />
-    public Task<JobInstance> CreateJobInstanceAsync(string jobName, JobParameters parameters)
+    public Task<JobInstance> CreateJobInstanceAsync(string jobName, JobParameters parameters, CancellationToken cancellationToken = default)
     {
         var instance = new JobInstance
         {
@@ -33,7 +33,7 @@ public sealed class InMemoryJobRepository : IJobRepository
     }
 
     /// <inheritdoc />
-    public Task<JobExecution> CreateJobExecutionAsync(JobInstance instance, JobParameters parameters)
+    public Task<JobExecution> CreateJobExecutionAsync(JobInstance instance, JobParameters parameters, CancellationToken cancellationToken = default)
     {
         var execution = new JobExecution
         {
@@ -47,14 +47,14 @@ public sealed class InMemoryJobRepository : IJobRepository
     }
 
     /// <inheritdoc />
-    public Task UpdateJobExecutionAsync(JobExecution execution)
+    public Task UpdateJobExecutionAsync(JobExecution execution, CancellationToken cancellationToken = default)
     {
         _executions[execution.Id] = execution;
         return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public Task<StepExecution> CreateStepExecutionAsync(JobExecution jobExecution, string stepName)
+    public Task<StepExecution> CreateStepExecutionAsync(JobExecution jobExecution, string stepName, CancellationToken cancellationToken = default)
     {
         var stepExecution = new StepExecution
         {
@@ -68,14 +68,14 @@ public sealed class InMemoryJobRepository : IJobRepository
     }
 
     /// <inheritdoc />
-    public Task UpdateStepExecutionAsync(StepExecution stepExecution)
+    public Task UpdateStepExecutionAsync(StepExecution stepExecution, CancellationToken cancellationToken = default)
     {
         _stepExecutions[stepExecution.Id] = stepExecution;
         return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public Task<JobExecution?> GetLastJobExecutionAsync(string jobName, JobParameters parameters)
+    public Task<JobExecution?> GetLastJobExecutionAsync(string jobName, JobParameters parameters, CancellationToken cancellationToken = default)
     {
         var last = _executions.Values
             .Where(e => e.JobInstance.JobName == jobName && e.JobInstance.Parameters.Equals(parameters))
@@ -85,7 +85,7 @@ public sealed class InMemoryJobRepository : IJobRepository
     }
 
     /// <inheritdoc />
-    public Task<IReadOnlyList<JobExecution>> GetJobExecutionsAsync(JobInstance instance)
+    public Task<IReadOnlyList<JobExecution>> GetJobExecutionsAsync(JobInstance instance, CancellationToken cancellationToken = default)
     {
         IReadOnlyList<JobExecution> result = _executions.Values
             .Where(e => e.JobInstance.Id == instance.Id)
@@ -95,7 +95,7 @@ public sealed class InMemoryJobRepository : IJobRepository
     }
 
     /// <inheritdoc />
-    public Task<StepExecution?> GetLastStepExecutionAsync(long jobExecutionId, string stepName)
+    public Task<StepExecution?> GetLastStepExecutionAsync(long jobExecutionId, string stepName, CancellationToken cancellationToken = default)
     {
         var last = _stepExecutions.Values
             .Where(s => s.JobExecution.Id == jobExecutionId && s.StepName == stepName)

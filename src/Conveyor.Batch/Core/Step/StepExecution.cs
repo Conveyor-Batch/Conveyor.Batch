@@ -22,14 +22,14 @@ public sealed class StepExecution
     /// <summary>Gets the parent job execution.</summary>
     public JobExecution JobExecution { get; init; } = null!;
 
-    /// <summary>Gets or sets the current status of this step execution.</summary>
-    public BatchStatus Status { get; set; } = BatchStatus.Starting;
+    /// <summary>Gets the current status of this step execution.</summary>
+    public BatchStatus Status { get; internal set; } = BatchStatus.Starting;
 
     /// <summary>Gets the UTC time at which this step execution started.</summary>
     public DateTimeOffset StartTime { get; init; } = DateTimeOffset.UtcNow;
 
-    /// <summary>Gets or sets the UTC time at which this step execution ended.</summary>
-    public DateTimeOffset? EndTime { get; set; }
+    /// <summary>Gets the UTC time at which this step execution ended.</summary>
+    public DateTimeOffset? EndTime { get; internal set; }
 
     /// <summary>Gets the total number of items read during this execution.</summary>
     public long ReadCount => Interlocked.Read(ref _readCount);
@@ -43,8 +43,8 @@ public sealed class StepExecution
     /// <summary>Gets the total number of items that caused a rollback.</summary>
     public long RollbackCount => Interlocked.Read(ref _rollbackCount);
 
-    /// <summary>Gets or sets the exception that caused this step to fail, if any.</summary>
-    public Exception? FailureException { get; set; }
+    /// <summary>Gets the exception that caused this step to fail, if any.</summary>
+    public Exception? FailureException { get; internal set; }
 
     /// <summary>Gets or sets the checkpoint state for this step execution, used to resume a restarted run.</summary>
     public BatchExecutionContext ExecutionContext { get; set; } = new();

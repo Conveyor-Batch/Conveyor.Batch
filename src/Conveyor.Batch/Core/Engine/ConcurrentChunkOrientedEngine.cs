@@ -291,22 +291,46 @@ public sealed class ConcurrentChunkOrientedEngine<TInput, TOutput>
         {
             var chunk = new List<TOutput>(_chunkSize);
 
+            if (_listener is not null)
+                await _listener.BeforeChunkAsync(context, token).ConfigureAwait(false);
+
             await foreach (var item in reader.ReadAllAsync(token).ConfigureAwait(false))
             {
                 chunk.Add(item);
 
                 if (chunk.Count >= _chunkSize)
-                    await CommitChunkAsync(chunk, context, token).ConfigureAwait(false);
+                {
+                    await CommitAndNotifyAsync(chunk, context, token).ConfigureAwait(false);
+
+                    if (_listener is not null)
+                        await _listener.BeforeChunkAsync(context, token).ConfigureAwait(false);
+                }
             }
 
             if (chunk.Count > 0)
-                await CommitChunkAsync(chunk, context, token).ConfigureAwait(false);
+                await CommitAndNotifyAsync(chunk, context, token).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             reportFault(ex);
             throw;
         }
+    }
+
+    private async ValueTask CommitAndNotifyAsync(List<TOutput> chunk, StepExecutionContext context, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await CommitChunkAsync(chunk, context, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (_listener is not null)
+        {
+            await _listener.OnChunkErrorAsync(context, ex, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+
+        if (_listener is not null)
+            await _listener.AfterChunkAsync(context, cancellationToken).ConfigureAwait(false);
     }
 
     private async ValueTask<TOutput?> ProcessItemAsync(TInput item, StepExecutionContext context, CancellationToken cancellationToken)

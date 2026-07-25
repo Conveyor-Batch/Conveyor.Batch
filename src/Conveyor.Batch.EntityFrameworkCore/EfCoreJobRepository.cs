@@ -41,9 +41,9 @@ public sealed class EfCoreJobRepository : IJobRepository, IDisposable
     public void Dispose() => _semaphore.Dispose();
 
     /// <inheritdoc />
-    public async Task<JobInstance> CreateJobInstanceAsync(string jobName, JobParameters parameters)
+    public async Task<JobInstance> CreateJobInstanceAsync(string jobName, JobParameters parameters, CancellationToken cancellationToken = default)
     {
-        await _semaphore.WaitAsync().ConfigureAwait(false);
+        await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var entity = new JobInstanceEntity
@@ -53,7 +53,7 @@ public sealed class EfCoreJobRepository : IJobRepository, IDisposable
             };
 
             _dbContext.JobInstances.Add(entity);
-            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
             return ToJobInstance(entity, parameters);
         }
@@ -64,9 +64,9 @@ public sealed class EfCoreJobRepository : IJobRepository, IDisposable
     }
 
     /// <inheritdoc />
-    public async Task<JobExecution> CreateJobExecutionAsync(JobInstance instance, JobParameters parameters)
+    public async Task<JobExecution> CreateJobExecutionAsync(JobInstance instance, JobParameters parameters, CancellationToken cancellationToken = default)
     {
-        await _semaphore.WaitAsync().ConfigureAwait(false);
+        await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var entity = new JobExecutionEntity
@@ -78,7 +78,7 @@ public sealed class EfCoreJobRepository : IJobRepository, IDisposable
             };
 
             _dbContext.JobExecutions.Add(entity);
-            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
             return ToJobExecution(entity, instance, parameters);
         }
@@ -89,13 +89,13 @@ public sealed class EfCoreJobRepository : IJobRepository, IDisposable
     }
 
     /// <inheritdoc />
-    public async Task UpdateJobExecutionAsync(JobExecution execution)
+    public async Task UpdateJobExecutionAsync(JobExecution execution, CancellationToken cancellationToken = default)
     {
-        await _semaphore.WaitAsync().ConfigureAwait(false);
+        await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var entity = await _dbContext.JobExecutions
-                .FindAsync(execution.Id)
+                .FindAsync(new object?[] { execution.Id }, cancellationToken)
                 .ConfigureAwait(false)
                 ?? throw new InvalidOperationException(
                     $"JobExecution with Id {execution.Id} was not found in the repository.");
@@ -105,7 +105,7 @@ public sealed class EfCoreJobRepository : IJobRepository, IDisposable
             entity.FailureMessage = execution.FailureException?.Message;
             entity.LastHeartbeatAt = execution.LastHeartbeatAt;
 
-            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -114,9 +114,9 @@ public sealed class EfCoreJobRepository : IJobRepository, IDisposable
     }
 
     /// <inheritdoc />
-    public async Task<StepExecution> CreateStepExecutionAsync(JobExecution jobExecution, string stepName)
+    public async Task<StepExecution> CreateStepExecutionAsync(JobExecution jobExecution, string stepName, CancellationToken cancellationToken = default)
     {
-        await _semaphore.WaitAsync().ConfigureAwait(false);
+        await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var entity = new StepExecutionEntity
@@ -128,7 +128,7 @@ public sealed class EfCoreJobRepository : IJobRepository, IDisposable
             };
 
             _dbContext.StepExecutions.Add(entity);
-            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
             return ToStepExecution(entity, jobExecution);
         }
@@ -139,13 +139,13 @@ public sealed class EfCoreJobRepository : IJobRepository, IDisposable
     }
 
     /// <inheritdoc />
-    public async Task UpdateStepExecutionAsync(StepExecution stepExecution)
+    public async Task UpdateStepExecutionAsync(StepExecution stepExecution, CancellationToken cancellationToken = default)
     {
-        await _semaphore.WaitAsync().ConfigureAwait(false);
+        await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var entity = await _dbContext.StepExecutions
-                .FindAsync(stepExecution.Id)
+                .FindAsync(new object?[] { stepExecution.Id }, cancellationToken)
                 .ConfigureAwait(false)
                 ?? throw new InvalidOperationException(
                     $"StepExecution with Id {stepExecution.Id} was not found in the repository.");
@@ -159,7 +159,7 @@ public sealed class EfCoreJobRepository : IJobRepository, IDisposable
             entity.FailureMessage = stepExecution.FailureException?.Message;
             entity.ExecutionContextJson = SerializeExecutionContext(stepExecution.ExecutionContext);
 
-            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -168,9 +168,9 @@ public sealed class EfCoreJobRepository : IJobRepository, IDisposable
     }
 
     /// <inheritdoc />
-    public async Task<JobExecution?> GetLastJobExecutionAsync(string jobName, JobParameters parameters)
+    public async Task<JobExecution?> GetLastJobExecutionAsync(string jobName, JobParameters parameters, CancellationToken cancellationToken = default)
     {
-        await _semaphore.WaitAsync().ConfigureAwait(false);
+        await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var parametersJson = SerializeParameters(parameters);
@@ -180,7 +180,7 @@ public sealed class EfCoreJobRepository : IJobRepository, IDisposable
                 .Where(e => e.JobInstance.JobName == jobName
                          && e.JobInstance.ParametersJson == parametersJson)
                 .OrderByDescending(e => e.Id)
-                .FirstOrDefaultAsync()
+                .FirstOrDefaultAsync(cancellationToken)
                 .ConfigureAwait(false);
 
             if (executionEntity is null)
@@ -196,16 +196,16 @@ public sealed class EfCoreJobRepository : IJobRepository, IDisposable
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<JobExecution>> GetJobExecutionsAsync(JobInstance instance)
+    public async Task<IReadOnlyList<JobExecution>> GetJobExecutionsAsync(JobInstance instance, CancellationToken cancellationToken = default)
     {
-        await _semaphore.WaitAsync().ConfigureAwait(false);
+        await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var entities = await _dbContext.JobExecutions
                 .Include(e => e.JobInstance)
                 .Where(e => e.JobInstanceId == instance.Id)
                 .OrderBy(e => e.Id)
-                .ToListAsync()
+                .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
 
             return entities
@@ -252,16 +252,16 @@ public sealed class EfCoreJobRepository : IJobRepository, IDisposable
     }
 
     /// <inheritdoc />
-    public async Task<StepExecution?> GetLastStepExecutionAsync(long jobExecutionId, string stepName)
+    public async Task<StepExecution?> GetLastStepExecutionAsync(long jobExecutionId, string stepName, CancellationToken cancellationToken = default)
     {
-        await _semaphore.WaitAsync().ConfigureAwait(false);
+        await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var entity = await _dbContext.StepExecutions
                 .Include(e => e.JobExecution).ThenInclude(je => je.JobInstance)
                 .Where(e => e.JobExecutionId == jobExecutionId && e.StepName == stepName)
                 .OrderByDescending(e => e.Id)
-                .FirstOrDefaultAsync()
+                .FirstOrDefaultAsync(cancellationToken)
                 .ConfigureAwait(false);
 
             if (entity is null)

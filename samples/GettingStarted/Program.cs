@@ -8,7 +8,6 @@
 // Run with:  dotnet run --project samples/GettingStarted
 
 using Conveyor.Batch.Abstractions;
-using Conveyor.Batch.Core.Engine;
 using Conveyor.Batch.Core.Job;
 using Conveyor.Batch.Core.Repository;
 using Conveyor.Batch.Core.Step;
@@ -113,59 +112,29 @@ public static async Task<int> RunAsync()
 Console.WriteLine("=== Conveyor.Batch — Getting Started Sample ===");
 Console.WriteLine();
 
-// Build the step execution context manually (JobBuilder/StepBuilder will
-// provide a fluent API once implemented; for now we compose directly).
+// StepBuilder/JobBuilder own all job/step execution bookkeeping (creating and persisting
+// job/step executions, tracking Status/EndTime/FailureException) — application code just
+// wires up the reader/processor/writer and runs the resulting job.
 var repository = new InMemoryJobRepository();
 
-var jobInstance = await repository.CreateJobInstanceAsync(
-    "order-processing-job",
-    JobParameters.Empty);
+var step = new StepBuilder<Order, ProcessedOrder>(repository)
+    .Reader(new InMemoryOrderReader())
+    .Processor(new OrderProcessor())
+    .Writer(new ConsoleOrderWriter())
+    .ChunkSize(10) // commit every 10 items
+    .Build("process-orders");
 
-var jobExecution = await repository.CreateJobExecutionAsync(jobInstance, JobParameters.Empty);
-jobExecution.Status = BatchStatus.Started;
-await repository.UpdateJobExecutionAsync(jobExecution);
+var job = new JobBuilder("order-processing-job", repository).AddStep(step).Build();
 
-var stepExecution = await repository.CreateStepExecutionAsync(jobExecution, "process-orders");
-stepExecution.Status = BatchStatus.Started;
-await repository.UpdateStepExecutionAsync(stepExecution);
-
-var context = new StepExecutionContext(stepExecution);
-
-// Compose the chunk-oriented engine
-var engine = new ChunkOrientedEngine<Order, ProcessedOrder>(
-    reader: new InMemoryOrderReader(),
-    processor: new OrderProcessor(),
-    writer: new ConsoleOrderWriter(),
-    chunkSize: 10); // commit every 10 items
-
-Console.WriteLine($"Running step '{context.StepName}' with chunk size 10...");
+Console.WriteLine("Running step 'process-orders' with chunk size 10...");
 Console.WriteLine();
 
-try
+var jobExecution = await job.ExecuteAsync(JobParameters.Empty, CancellationToken.None);
+var stepExecution = await repository.GetLastStepExecutionAsync(jobExecution.Id, "process-orders");
+
+if (jobExecution.Status != BatchStatus.Completed)
 {
-    await engine.ExecuteAsync(context, CancellationToken.None);
-
-    stepExecution.Status = BatchStatus.Completed;
-    stepExecution.EndTime = DateTimeOffset.UtcNow;
-    await repository.UpdateStepExecutionAsync(stepExecution);
-
-    jobExecution.Status = BatchStatus.Completed;
-    jobExecution.EndTime = DateTimeOffset.UtcNow;
-    await repository.UpdateJobExecutionAsync(jobExecution);
-}
-catch (Exception ex)
-{
-    stepExecution.Status = BatchStatus.Failed;
-    stepExecution.FailureException = ex;
-    stepExecution.EndTime = DateTimeOffset.UtcNow;
-    await repository.UpdateStepExecutionAsync(stepExecution);
-
-    jobExecution.Status = BatchStatus.Failed;
-    jobExecution.FailureException = ex;
-    jobExecution.EndTime = DateTimeOffset.UtcNow;
-    await repository.UpdateJobExecutionAsync(jobExecution);
-
-    Console.WriteLine($"Job FAILED: {ex.Message}");
+    Console.WriteLine($"Job FAILED: {jobExecution.FailureException?.Message}");
     return 1;
 }
 
@@ -176,7 +145,7 @@ catch (Exception ex)
 Console.WriteLine();
 Console.WriteLine("=== Job Complete ===");
 Console.WriteLine($"  Status  : {jobExecution.Status}");
-Console.WriteLine($"  Read    : {stepExecution.ReadCount}");
+Console.WriteLine($"  Read    : {stepExecution!.ReadCount}");
 Console.WriteLine($"  Written : {stepExecution.WriteCount}");
 Console.WriteLine($"  Skipped : {stepExecution.SkipCount}");
 Console.WriteLine($"  Duration: {(jobExecution.EndTime!.Value - jobExecution.StartTime).TotalMilliseconds:F0} ms");

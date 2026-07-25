@@ -74,7 +74,9 @@ public sealed class LocalPartitionHandler : IPartitionHandler
             // Cancelled while still queued behind MaxDegreeOfParallelism — no worker ever ran
             // for this partition. Persist a Failed record instead of letting the exception
             // propagate out of Task.WhenAll, which would discard the results of sibling
-            // partitions that had already completed successfully.
+            // partitions that had already completed successfully. Uses CancellationToken.None
+            // deliberately: this write's entire purpose is to record a failure caused by the
+            // very token that was cancelled, so it must not itself be aborted by that token.
             return await PersistFailedPartitionAsync(managerJobExecution, partitionName, partitionContext, ex)
                 .ConfigureAwait(false);
         }
@@ -98,11 +100,11 @@ public sealed class LocalPartitionHandler : IPartitionHandler
         CancellationToken cancellationToken)
     {
         var tracked = await _repository
-            .CreateStepExecutionAsync(managerJobExecution, partitionName)
+            .CreateStepExecutionAsync(managerJobExecution, partitionName, cancellationToken)
             .ConfigureAwait(false);
         tracked.ExecutionContext = ClonePartitionContext(partitionContext);
         tracked.Status = BatchStatus.Started;
-        await _repository.UpdateStepExecutionAsync(tracked).ConfigureAwait(false);
+        await _repository.UpdateStepExecutionAsync(tracked, cancellationToken).ConfigureAwait(false);
 
         var clonedJobExecution = new JobExecution
         {
@@ -136,7 +138,10 @@ public sealed class LocalPartitionHandler : IPartitionHandler
         tracked.FailureException = workerResult.FailureException;
         tracked.CopyCountersFrom(workerResult);
 
-        await _repository.UpdateStepExecutionAsync(tracked).ConfigureAwait(false);
+        // CancellationToken.None: persists this partition's terminal outcome (which may itself
+        // be Failed/Stopped because cancellationToken was cancelled), so it must not be aborted
+        // by that same token.
+        await _repository.UpdateStepExecutionAsync(tracked, CancellationToken.None).ConfigureAwait(false);
 
         return tracked;
     }
@@ -147,14 +152,17 @@ public sealed class LocalPartitionHandler : IPartitionHandler
         BatchExecutionContext partitionContext,
         Exception exception)
     {
+        // CancellationToken.None throughout: see the call site's comment — this method exists
+        // specifically to record a partition as failed after a cancellation, so it must not be
+        // cancellable itself.
         var tracked = await _repository
-            .CreateStepExecutionAsync(managerJobExecution, partitionName)
+            .CreateStepExecutionAsync(managerJobExecution, partitionName, CancellationToken.None)
             .ConfigureAwait(false);
         tracked.ExecutionContext = ClonePartitionContext(partitionContext);
         tracked.Status = BatchStatus.Failed;
         tracked.FailureException = exception;
         tracked.EndTime = DateTimeOffset.UtcNow;
-        await _repository.UpdateStepExecutionAsync(tracked).ConfigureAwait(false);
+        await _repository.UpdateStepExecutionAsync(tracked, CancellationToken.None).ConfigureAwait(false);
 
         return tracked;
     }

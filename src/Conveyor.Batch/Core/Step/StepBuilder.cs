@@ -271,13 +271,13 @@ internal sealed class ChunkOrientedStep<TInput, TOutput> : IStep
         var activity = ConveyorBatchTelemetry.ActivitySource.StartActivity(ConveyorBatchTelemetry.StepActivityName);
         activity?.SetTag(ConveyorBatchTelemetry.StepNameTag, Name);
 
-        var stepExecution = await _repository.CreateStepExecutionAsync(jobExecution, Name).ConfigureAwait(false);
+        var stepExecution = await _repository.CreateStepExecutionAsync(jobExecution, Name, cancellationToken).ConfigureAwait(false);
         activity?.SetTag(ConveyorBatchTelemetry.StepExecutionIdTag, stepExecution.Id);
 
         if (jobExecution.RestartedFromExecutionId is long previousJobExecutionId)
         {
             var previousStepExecution = await _repository
-                .GetLastStepExecutionAsync(previousJobExecutionId, Name)
+                .GetLastStepExecutionAsync(previousJobExecutionId, Name, cancellationToken)
                 .ConfigureAwait(false);
 
             if (previousStepExecution is not null)
@@ -289,7 +289,7 @@ internal sealed class ChunkOrientedStep<TInput, TOutput> : IStep
         }
 
         stepExecution.Status = BatchStatus.Started;
-        await _repository.UpdateStepExecutionAsync(stepExecution).ConfigureAwait(false);
+        await _repository.UpdateStepExecutionAsync(stepExecution, cancellationToken).ConfigureAwait(false);
 
         var context = new StepExecutionContext(stepExecution);
         var engine = new ChunkOrientedEngine<TInput, TOutput>(
@@ -310,7 +310,9 @@ internal sealed class ChunkOrientedStep<TInput, TOutput> : IStep
         finally
         {
             stepExecution.EndTime = DateTimeOffset.UtcNow;
-            await _repository.UpdateStepExecutionAsync(stepExecution).ConfigureAwait(false);
+            // CancellationToken.None: persists the step's terminal status even if
+            // cancellationToken is what caused a Failed/Stopped outcome.
+            await _repository.UpdateStepExecutionAsync(stepExecution, CancellationToken.None).ConfigureAwait(false);
             activity?.SetTag(ConveyorBatchTelemetry.StepStatusTag, stepExecution.Status.ToString());
             activity?.Stop();
         }
@@ -366,13 +368,13 @@ internal sealed class ConcurrentChunkOrientedStep<TInput, TOutput> : IStep
         var activity = ConveyorBatchTelemetry.ActivitySource.StartActivity(ConveyorBatchTelemetry.StepActivityName);
         activity?.SetTag(ConveyorBatchTelemetry.StepNameTag, Name);
 
-        var stepExecution = await _repository.CreateStepExecutionAsync(jobExecution, Name).ConfigureAwait(false);
+        var stepExecution = await _repository.CreateStepExecutionAsync(jobExecution, Name, cancellationToken).ConfigureAwait(false);
         activity?.SetTag(ConveyorBatchTelemetry.StepExecutionIdTag, stepExecution.Id);
 
         if (jobExecution.RestartedFromExecutionId is long previousJobExecutionId)
         {
             var previousStepExecution = await _repository
-                .GetLastStepExecutionAsync(previousJobExecutionId, Name)
+                .GetLastStepExecutionAsync(previousJobExecutionId, Name, cancellationToken)
                 .ConfigureAwait(false);
 
             if (previousStepExecution is not null)
@@ -384,7 +386,7 @@ internal sealed class ConcurrentChunkOrientedStep<TInput, TOutput> : IStep
         }
 
         stepExecution.Status = BatchStatus.Started;
-        await _repository.UpdateStepExecutionAsync(stepExecution).ConfigureAwait(false);
+        await _repository.UpdateStepExecutionAsync(stepExecution, cancellationToken).ConfigureAwait(false);
 
         var context = new StepExecutionContext(stepExecution);
         var engine = new ConcurrentChunkOrientedEngine<TInput, TOutput>(
@@ -405,7 +407,9 @@ internal sealed class ConcurrentChunkOrientedStep<TInput, TOutput> : IStep
         finally
         {
             stepExecution.EndTime = DateTimeOffset.UtcNow;
-            await _repository.UpdateStepExecutionAsync(stepExecution).ConfigureAwait(false);
+            // CancellationToken.None: persists the step's terminal status even if
+            // cancellationToken is what caused a Failed/Stopped outcome.
+            await _repository.UpdateStepExecutionAsync(stepExecution, CancellationToken.None).ConfigureAwait(false);
             activity?.SetTag(ConveyorBatchTelemetry.StepStatusTag, stepExecution.Status.ToString());
             activity?.Stop();
         }

@@ -109,33 +109,33 @@ public sealed class HeartbeatIntegrationTests
     {
         private int _updateJobExecutionCallCount;
 
-        public Task<JobInstance> CreateJobInstanceAsync(string jobName, JobParameters parameters) =>
-            inner.CreateJobInstanceAsync(jobName, parameters);
+        public Task<JobInstance> CreateJobInstanceAsync(string jobName, JobParameters parameters, CancellationToken cancellationToken = default) =>
+            inner.CreateJobInstanceAsync(jobName, parameters, cancellationToken);
 
-        public Task<JobExecution> CreateJobExecutionAsync(JobInstance instance, JobParameters parameters) =>
-            inner.CreateJobExecutionAsync(instance, parameters);
+        public Task<JobExecution> CreateJobExecutionAsync(JobInstance instance, JobParameters parameters, CancellationToken cancellationToken = default) =>
+            inner.CreateJobExecutionAsync(instance, parameters, cancellationToken);
 
-        public Task UpdateJobExecutionAsync(JobExecution execution)
+        public Task UpdateJobExecutionAsync(JobExecution execution, CancellationToken cancellationToken = default)
         {
             if (Interlocked.Increment(ref _updateJobExecutionCallCount) == throwOnCallNumber)
                 throw new InvalidOperationException("simulated transient heartbeat write failure");
-            return inner.UpdateJobExecutionAsync(execution);
+            return inner.UpdateJobExecutionAsync(execution, cancellationToken);
         }
 
-        public Task<StepExecution> CreateStepExecutionAsync(JobExecution jobExecution, string stepName) =>
-            inner.CreateStepExecutionAsync(jobExecution, stepName);
+        public Task<StepExecution> CreateStepExecutionAsync(JobExecution jobExecution, string stepName, CancellationToken cancellationToken = default) =>
+            inner.CreateStepExecutionAsync(jobExecution, stepName, cancellationToken);
 
-        public Task UpdateStepExecutionAsync(StepExecution stepExecution) =>
-            inner.UpdateStepExecutionAsync(stepExecution);
+        public Task UpdateStepExecutionAsync(StepExecution stepExecution, CancellationToken cancellationToken = default) =>
+            inner.UpdateStepExecutionAsync(stepExecution, cancellationToken);
 
-        public Task<JobExecution?> GetLastJobExecutionAsync(string jobName, JobParameters parameters) =>
-            inner.GetLastJobExecutionAsync(jobName, parameters);
+        public Task<JobExecution?> GetLastJobExecutionAsync(string jobName, JobParameters parameters, CancellationToken cancellationToken = default) =>
+            inner.GetLastJobExecutionAsync(jobName, parameters, cancellationToken);
 
-        public Task<IReadOnlyList<JobExecution>> GetJobExecutionsAsync(JobInstance instance) =>
-            inner.GetJobExecutionsAsync(instance);
+        public Task<IReadOnlyList<JobExecution>> GetJobExecutionsAsync(JobInstance instance, CancellationToken cancellationToken = default) =>
+            inner.GetJobExecutionsAsync(instance, cancellationToken);
 
-        public Task<StepExecution?> GetLastStepExecutionAsync(long jobExecutionId, string stepName) =>
-            inner.GetLastStepExecutionAsync(jobExecutionId, stepName);
+        public Task<StepExecution?> GetLastStepExecutionAsync(long jobExecutionId, string stepName, CancellationToken cancellationToken = default) =>
+            inner.GetLastStepExecutionAsync(jobExecutionId, stepName, cancellationToken);
 
         public Task<JobExecution?> GetRunningJobExecutionAsync(string jobName, JobParameters parameters, CancellationToken cancellationToken = default) =>
             inner.GetRunningJobExecutionAsync(jobName, parameters, cancellationToken);

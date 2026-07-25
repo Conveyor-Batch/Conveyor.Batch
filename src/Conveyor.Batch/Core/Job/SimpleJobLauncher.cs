@@ -67,10 +67,10 @@ internal sealed class SimpleJobLauncher : IJobLauncher
                 $"Could not acquire lock for job '{job.Name}'. " +
                 "Another process may be running this job.");
 
-        var instance = await _jobRepository.CreateJobInstanceAsync(job.Name, parameters).ConfigureAwait(false);
-        var execution = await _jobRepository.CreateJobExecutionAsync(instance, parameters).ConfigureAwait(false);
+        var instance = await _jobRepository.CreateJobInstanceAsync(job.Name, parameters, cancellationToken).ConfigureAwait(false);
+        var execution = await _jobRepository.CreateJobExecutionAsync(instance, parameters, cancellationToken).ConfigureAwait(false);
         execution.Status = BatchStatus.Started;
-        await _jobRepository.UpdateJobExecutionAsync(execution).ConfigureAwait(false);
+        await _jobRepository.UpdateJobExecutionAsync(execution, cancellationToken).ConfigureAwait(false);
 
         var activity = ConveyorBatchTelemetry.ActivitySource.StartActivity(ConveyorBatchTelemetry.JobActivityName);
         activity?.SetTag(ConveyorBatchTelemetry.JobNameTag, job.Name);
@@ -120,7 +120,10 @@ internal sealed class SimpleJobLauncher : IJobLauncher
             }
 
             stopwatch.Stop();
-            await _jobRepository.UpdateJobExecutionAsync(execution).ConfigureAwait(false);
+            // CancellationToken.None: this persists the run's final outcome (including
+            // Stopped/Failed after a cancellation) and must not itself be aborted by the very
+            // token that may have just been cancelled.
+            await _jobRepository.UpdateJobExecutionAsync(execution, CancellationToken.None).ConfigureAwait(false);
 
             activity?.SetTag(ConveyorBatchTelemetry.JobStatusTag, execution.Status.ToString());
             RecordJobMetrics(job.Name, execution.Status, stopwatch.Elapsed.TotalMilliseconds);
@@ -138,7 +141,7 @@ internal sealed class SimpleJobLauncher : IJobLauncher
             {
                 await Task.Delay(interval, cancellationToken).ConfigureAwait(false);
                 execution.LastHeartbeatAt = DateTimeOffset.UtcNow;
-                await _jobRepository.UpdateJobExecutionAsync(execution).ConfigureAwait(false);
+                await _jobRepository.UpdateJobExecutionAsync(execution, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {

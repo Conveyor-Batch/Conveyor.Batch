@@ -61,10 +61,10 @@ internal sealed class SequentialJob : IJob
     /// <inheritdoc />
     public async Task<JobExecution> ExecuteAsync(JobParameters parameters, CancellationToken cancellationToken)
     {
-        var previousExecution = await _repository.GetLastJobExecutionAsync(Name, parameters).ConfigureAwait(false);
+        var previousExecution = await _repository.GetLastJobExecutionAsync(Name, parameters, cancellationToken).ConfigureAwait(false);
 
-        var instance = await _repository.CreateJobInstanceAsync(Name, parameters).ConfigureAwait(false);
-        var execution = await _repository.CreateJobExecutionAsync(instance, parameters).ConfigureAwait(false);
+        var instance = await _repository.CreateJobInstanceAsync(Name, parameters, cancellationToken).ConfigureAwait(false);
+        var execution = await _repository.CreateJobExecutionAsync(instance, parameters, cancellationToken).ConfigureAwait(false);
 
         bool isRestart = previousExecution is not null &&
             (previousExecution.Status == BatchStatus.Failed || previousExecution.Status == BatchStatus.Stopped);
@@ -79,7 +79,7 @@ internal sealed class SequentialJob : IJob
             execution.Status = BatchStatus.Started;
         }
 
-        await _repository.UpdateJobExecutionAsync(execution).ConfigureAwait(false);
+        await _repository.UpdateJobExecutionAsync(execution, cancellationToken).ConfigureAwait(false);
 
         try
         {
@@ -93,7 +93,9 @@ internal sealed class SequentialJob : IJob
                     execution.Status = BatchStatus.Failed;
                     execution.FailureException = stepExecution.FailureException;
                     execution.EndTime = DateTimeOffset.UtcNow;
-                    await _repository.UpdateJobExecutionAsync(execution).ConfigureAwait(false);
+                    // CancellationToken.None: persists the job's terminal Failed status, which
+                    // must survive even if cancellationToken itself is what caused the failure.
+                    await _repository.UpdateJobExecutionAsync(execution, CancellationToken.None).ConfigureAwait(false);
                     return execution;
                 }
             }
@@ -108,7 +110,9 @@ internal sealed class SequentialJob : IJob
         finally
         {
             execution.EndTime = DateTimeOffset.UtcNow;
-            await _repository.UpdateJobExecutionAsync(execution).ConfigureAwait(false);
+            // CancellationToken.None: same reasoning as above — this finally block is the one
+            // place that must always persist the job's terminal state.
+            await _repository.UpdateJobExecutionAsync(execution, CancellationToken.None).ConfigureAwait(false);
         }
 
         return execution;

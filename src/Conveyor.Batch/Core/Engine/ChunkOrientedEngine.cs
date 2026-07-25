@@ -116,6 +116,9 @@ public sealed class ChunkOrientedEngine<TInput, TOutput>
             var chunk = new List<TOutput>(_chunkSize);
             var stopped = false;
 
+            if (_listener is not null)
+                await _listener.BeforeChunkAsync(context, abortToken).ConfigureAwait(false);
+
             try
             {
                 await foreach (var item in _reader.ReadAsync(context, stoppingToken).WithCancellation(stoppingToken).ConfigureAwait(false))
@@ -143,8 +146,10 @@ public sealed class ChunkOrientedEngine<TInput, TOutput>
 
                     if (chunk.Count >= _chunkSize)
                     {
-                        await CommitChunkAsync(chunk, context, abortToken).ConfigureAwait(false);
-                        await CheckpointAsync(stream, context, abortToken).ConfigureAwait(false);
+                        await CommitCheckpointAndNotifyAsync(chunk, stream, context, abortToken).ConfigureAwait(false);
+
+                        if (_listener is not null)
+                            await _listener.BeforeChunkAsync(context, abortToken).ConfigureAwait(false);
                     }
                 }
             }
@@ -154,10 +159,7 @@ public sealed class ChunkOrientedEngine<TInput, TOutput>
             }
 
             if (chunk.Count > 0)
-            {
-                await CommitChunkAsync(chunk, context, abortToken).ConfigureAwait(false);
-                await CheckpointAsync(stream, context, abortToken).ConfigureAwait(false);
-            }
+                await CommitCheckpointAndNotifyAsync(chunk, stream, context, abortToken).ConfigureAwait(false);
 
             if (stopped)
                 context.StepExecution.Status = BatchStatus.Stopped;
@@ -172,6 +174,24 @@ public sealed class ChunkOrientedEngine<TInput, TOutput>
         }
     }
 
+    private async ValueTask CommitCheckpointAndNotifyAsync(List<TOutput> chunk, IItemStream? stream, StepExecutionContext context, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await CommitChunkAsync(chunk, context, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (_listener is not null)
+        {
+            await _listener.OnChunkErrorAsync(context, ex, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+
+        await CheckpointAsync(stream, context, cancellationToken).ConfigureAwait(false);
+
+        if (_listener is not null)
+            await _listener.AfterChunkAsync(context, cancellationToken).ConfigureAwait(false);
+    }
+
     private async ValueTask CheckpointAsync(IItemStream? stream, StepExecutionContext context, CancellationToken cancellationToken)
     {
         if (stream is null)
@@ -180,7 +200,7 @@ public sealed class ChunkOrientedEngine<TInput, TOutput>
         await stream.UpdateAsync(context.StepExecution.ExecutionContext, cancellationToken).ConfigureAwait(false);
 
         if (_jobRepository is not null)
-            await _jobRepository.UpdateStepExecutionAsync(context.StepExecution).ConfigureAwait(false);
+            await _jobRepository.UpdateStepExecutionAsync(context.StepExecution, cancellationToken).ConfigureAwait(false);
     }
 
     private async ValueTask<TOutput?> ProcessItemAsync(TInput item, StepExecutionContext context, CancellationToken cancellationToken)

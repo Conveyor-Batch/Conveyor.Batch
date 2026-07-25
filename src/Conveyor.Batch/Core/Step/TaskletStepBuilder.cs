@@ -70,10 +70,10 @@ internal sealed class TaskletStep : IStep
         var activity = ConveyorBatchTelemetry.ActivitySource.StartActivity(ConveyorBatchTelemetry.StepActivityName);
         activity?.SetTag(ConveyorBatchTelemetry.StepNameTag, Name);
 
-        var stepExecution = await _repository.CreateStepExecutionAsync(jobExecution, Name).ConfigureAwait(false);
+        var stepExecution = await _repository.CreateStepExecutionAsync(jobExecution, Name, cancellationToken).ConfigureAwait(false);
         activity?.SetTag(ConveyorBatchTelemetry.StepExecutionIdTag, stepExecution.Id);
         stepExecution.Status = BatchStatus.Started;
-        await _repository.UpdateStepExecutionAsync(stepExecution).ConfigureAwait(false);
+        await _repository.UpdateStepExecutionAsync(stepExecution, cancellationToken).ConfigureAwait(false);
 
         var context = new StepExecutionContext(stepExecution);
 
@@ -90,7 +90,9 @@ internal sealed class TaskletStep : IStep
         finally
         {
             stepExecution.EndTime = DateTimeOffset.UtcNow;
-            await _repository.UpdateStepExecutionAsync(stepExecution).ConfigureAwait(false);
+            // CancellationToken.None: persists the step's terminal status even if
+            // cancellationToken is what caused a Failed outcome.
+            await _repository.UpdateStepExecutionAsync(stepExecution, CancellationToken.None).ConfigureAwait(false);
             activity?.SetTag(ConveyorBatchTelemetry.StepStatusTag, stepExecution.Status.ToString());
             activity?.Stop();
         }

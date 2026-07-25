@@ -57,11 +57,11 @@ internal sealed class FlowJob : IJob
     /// </exception>
     public async Task<JobExecution> ExecuteAsync(JobParameters parameters, CancellationToken cancellationToken)
     {
-        var instance = await _repository.CreateJobInstanceAsync(Name, parameters).ConfigureAwait(false);
-        var execution = await _repository.CreateJobExecutionAsync(instance, parameters).ConfigureAwait(false);
+        var instance = await _repository.CreateJobInstanceAsync(Name, parameters, cancellationToken).ConfigureAwait(false);
+        var execution = await _repository.CreateJobExecutionAsync(instance, parameters, cancellationToken).ConfigureAwait(false);
 
         execution.Status = BatchStatus.Started;
-        await _repository.UpdateJobExecutionAsync(execution).ConfigureAwait(false);
+        await _repository.UpdateJobExecutionAsync(execution, cancellationToken).ConfigureAwait(false);
 
         var current = _startStep;
 
@@ -79,7 +79,7 @@ internal sealed class FlowJob : IJob
                 {
                     var error = new InvalidOperationException(
                         $"No transition defined for step '{current.Name}' with exit status '{exitStatus}'.");
-                    await FinishAsync(execution, BatchStatus.Failed, error).ConfigureAwait(false);
+                    await FinishAsync(execution, BatchStatus.Failed, cancellationToken, error).ConfigureAwait(false);
                     throw error;
                 }
 
@@ -90,33 +90,35 @@ internal sealed class FlowJob : IJob
                         continue;
 
                     case FlowAction.End:
-                        await FinishAsync(execution, stepExecution.Status).ConfigureAwait(false);
+                        await FinishAsync(execution, stepExecution.Status, cancellationToken).ConfigureAwait(false);
                         return execution;
 
                     case FlowAction.Fail:
-                        await FinishAsync(execution, BatchStatus.Failed, stepExecution.FailureException)
+                        await FinishAsync(execution, BatchStatus.Failed, cancellationToken, stepExecution.FailureException)
                             .ConfigureAwait(false);
                         return execution;
 
                     default: // FlowAction.Stop
-                        await FinishAsync(execution, BatchStatus.Stopped).ConfigureAwait(false);
+                        await FinishAsync(execution, BatchStatus.Stopped, cancellationToken).ConfigureAwait(false);
                         return execution;
                 }
             }
         }
         catch (OperationCanceledException)
         {
-            await FinishAsync(execution, BatchStatus.Stopped).ConfigureAwait(false);
+            // CancellationToken.None: this persists the job's terminal Stopped status after the
+            // very token that triggered it was cancelled, so it must not itself be cancellable.
+            await FinishAsync(execution, BatchStatus.Stopped, CancellationToken.None).ConfigureAwait(false);
             throw;
         }
     }
 
-    private async Task FinishAsync(JobExecution execution, BatchStatus status, Exception? failureException = null)
+    private async Task FinishAsync(JobExecution execution, BatchStatus status, CancellationToken cancellationToken, Exception? failureException = null)
     {
         execution.Status = status;
         execution.FailureException = failureException;
         execution.EndTime = DateTimeOffset.UtcNow;
-        await _repository.UpdateJobExecutionAsync(execution).ConfigureAwait(false);
+        await _repository.UpdateJobExecutionAsync(execution, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

@@ -8,8 +8,10 @@ namespace Conveyor.Batch.Listeners;
 public interface IJobExecutionListener
 {
     /// <summary>Called before the job begins executing.</summary>
-    ValueTask BeforeJobAsync(JobExecution jobExecution, CancellationToken cancellationToken);
+    ValueTask BeforeJobAsync(JobExecution jobExecution, CancellationToken cancellationToken) =>
+        ValueTask.CompletedTask;
 
     /// <summary>Called after the job has finished (successfully or not).</summary>
-    ValueTask AfterJobAsync(JobExecution jobExecution, CancellationToken cancellationToken);
+    ValueTask AfterJobAsync(JobExecution jobExecution, CancellationToken cancellationToken) =>
+        ValueTask.CompletedTask;
 }

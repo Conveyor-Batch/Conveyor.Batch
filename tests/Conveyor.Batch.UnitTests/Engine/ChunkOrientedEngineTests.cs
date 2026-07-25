@@ -53,6 +53,12 @@ public sealed class ChunkOrientedEngineTests
         }
     }
 
+    private sealed class ThrowingWriter<T>(Exception exception) : IItemWriter<T>
+    {
+        public ValueTask WriteAsync(IReadOnlyList<T> items, StepExecutionContext ctx, CancellationToken ct) =>
+            throw exception;
+    }
+
     private sealed class AlwaysSkipPolicy : ISkipPolicy
     {
         public bool ShouldSkip(Exception exception, long skipCount) => true;
@@ -343,6 +349,53 @@ public sealed class ChunkOrientedEngineTests
 
         Assert.Contains("BeforeWrite", listener.Events);
         Assert.Contains("AfterWrite", listener.Events);
+    }
+
+    [Fact]
+    public async Task ChunkListener_BeforeAndAfterChunk_FiredOncePerCommittedChunk()
+    {
+        var listener = new RecordingChunkListener();
+        var writer = new CapturingWriter<int>();
+        var engine = new ChunkOrientedEngine<int, int>(
+            new ListReader<int>(Enumerable.Range(1, 7)),
+            new IdentityProcessor<int>(),
+            writer,
+            chunkSize: 3,
+            listener: listener);
+
+        await engine.ExecuteAsync(MakeContext(), CancellationToken.None);
+
+        // 7 items / chunk 3 → 3 chunks committed (3, 3, 1).
+        Assert.Equal(3, writer.Chunks.Count);
+        Assert.Equal(3, listener.Events.Count(e => e == "BeforeChunk"));
+        Assert.Equal(3, listener.Events.Count(e => e == "AfterChunk"));
+
+        // BeforeChunk fires before the first item is ever read, and AfterChunk always follows
+        // a chunk's write; a BeforeChunk after the final committed chunk would mean a
+        // non-existent "next chunk" was announced.
+        Assert.Equal("BeforeChunk", listener.Events[0]);
+        Assert.Equal("AfterChunk", listener.Events[^1]);
+    }
+
+    [Fact]
+    public async Task ChunkListener_WriterThrows_OnChunkErrorFiredAndExceptionPropagates()
+    {
+        var listener = new RecordingChunkListener();
+        var writerException = new InvalidOperationException("writer failure");
+        var engine = new ChunkOrientedEngine<int, int>(
+            new ListReader<int>([1, 2, 3]),
+            new IdentityProcessor<int>(),
+            new ThrowingWriter<int>(writerException),
+            chunkSize: 10,
+            listener: listener);
+
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            engine.ExecuteAsync(MakeContext(), CancellationToken.None));
+
+        Assert.Same(writerException, thrown);
+        Assert.Contains("OnChunkError", listener.Events);
+        // A writer failure is not a skip — the skip hook must not fire for it.
+        Assert.DoesNotContain("OnSkip", listener.Events);
     }
 
     // ──────────────────────────────────────────────────────────────

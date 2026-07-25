@@ -42,10 +42,10 @@ internal sealed class PartitionStep : IStep
         var activity = ConveyorBatchTelemetry.ActivitySource.StartActivity(ConveyorBatchTelemetry.StepActivityName);
         activity?.SetTag(ConveyorBatchTelemetry.StepNameTag, Name);
 
-        var managerExecution = await _repository.CreateStepExecutionAsync(jobExecution, Name).ConfigureAwait(false);
+        var managerExecution = await _repository.CreateStepExecutionAsync(jobExecution, Name, cancellationToken).ConfigureAwait(false);
         activity?.SetTag(ConveyorBatchTelemetry.StepExecutionIdTag, managerExecution.Id);
         managerExecution.Status = BatchStatus.Started;
-        await _repository.UpdateStepExecutionAsync(managerExecution).ConfigureAwait(false);
+        await _repository.UpdateStepExecutionAsync(managerExecution, cancellationToken).ConfigureAwait(false);
 
         try
         {
@@ -68,7 +68,9 @@ internal sealed class PartitionStep : IStep
         finally
         {
             managerExecution.EndTime = DateTimeOffset.UtcNow;
-            await _repository.UpdateStepExecutionAsync(managerExecution).ConfigureAwait(false);
+            // CancellationToken.None: persists the manager step's terminal status even if
+            // cancellationToken is what caused a Failed/Stopped outcome.
+            await _repository.UpdateStepExecutionAsync(managerExecution, CancellationToken.None).ConfigureAwait(false);
             activity?.SetTag(ConveyorBatchTelemetry.StepStatusTag, managerExecution.Status.ToString());
             activity?.Stop();
         }

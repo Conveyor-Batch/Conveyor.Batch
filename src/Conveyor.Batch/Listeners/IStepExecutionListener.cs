@@ -8,8 +8,10 @@ namespace Conveyor.Batch.Listeners;
 public interface IStepExecutionListener
 {
     /// <summary>Called before the step begins executing.</summary>
-    ValueTask BeforeStepAsync(StepExecution stepExecution, CancellationToken cancellationToken);
+    ValueTask BeforeStepAsync(StepExecution stepExecution, CancellationToken cancellationToken) =>
+        ValueTask.CompletedTask;
 
     /// <summary>Called after the step has finished (successfully or not).</summary>
-    ValueTask AfterStepAsync(StepExecution stepExecution, CancellationToken cancellationToken);
+    ValueTask AfterStepAsync(StepExecution stepExecution, CancellationToken cancellationToken) =>
+        ValueTask.CompletedTask;
 }

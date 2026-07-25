@@ -5,6 +5,7 @@ using Conveyor.Batch.Core.Engine;
 using Conveyor.Batch.Core.Job;
 using Conveyor.Batch.Core.Repository;
 using Conveyor.Batch.Core.Step;
+using Conveyor.Batch.Listeners;
 using Conveyor.Batch.Policies;
 
 namespace Conveyor.Batch.UnitTests.Engine;
@@ -143,6 +144,42 @@ public sealed class ConcurrentChunkOrientedEngineTests
     private sealed class NeverSkipPolicy : ISkipPolicy
     {
         public bool ShouldSkip(Exception exception, long skipCount) => false;
+    }
+
+    private sealed class ThrowingWriter<T>(Exception exception) : IItemWriter<T>
+    {
+        public ValueTask WriteAsync(IReadOnlyList<T> items, StepExecutionContext ctx, CancellationToken ct) =>
+            throw exception;
+    }
+
+    /// <summary>
+    /// Thread-safe recording listener: the assembler that fires these callbacks runs on a single
+    /// task, but a lock keeps this safe regardless.
+    /// </summary>
+    private sealed class RecordingChunkListener : IChunkListener
+    {
+        private readonly object _lock = new();
+        private readonly List<string> _events = [];
+
+        public IReadOnlyList<string> Events => _events;
+
+        public ValueTask BeforeChunkAsync(StepExecutionContext ctx, CancellationToken ct)
+        {
+            lock (_lock) _events.Add("BeforeChunk");
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask AfterChunkAsync(StepExecutionContext ctx, CancellationToken ct)
+        {
+            lock (_lock) _events.Add("AfterChunk");
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask OnChunkErrorAsync(StepExecutionContext ctx, Exception exception, CancellationToken ct)
+        {
+            lock (_lock) _events.Add("OnChunkError");
+            return ValueTask.CompletedTask;
+        }
     }
 
     // ──────────────────────────────────────────────────────────────
@@ -327,6 +364,47 @@ public sealed class ConcurrentChunkOrientedEngineTests
         Assert.All(writer.Chunks, chunk => Assert.True(chunk.Count <= 3));
         Assert.True(writer.Chunks.Count >= 3);
         Assert.Contains(writer.Chunks, chunk => chunk.Count < 3);
+    }
+
+    [Fact]
+    public async Task ChunkListener_BeforeAndAfterChunk_FiredOncePerCommittedChunk()
+    {
+        var listener = new RecordingChunkListener();
+        var writer = new CapturingWriter<int>();
+        var engine = new ConcurrentChunkOrientedEngine<int, int>(
+            new ListReader<int>(Enumerable.Range(1, 7)),
+            new IdentityProcessor<int>(),
+            writer,
+            chunkSize: 3,
+            degreeOfParallelism: 2,
+            listener: listener);
+
+        await engine.ExecuteAsync(MakeContext(), CancellationToken.None);
+
+        // 7 items / chunk 3 → 3 chunks committed (3, 3, 1).
+        Assert.Equal(3, writer.Chunks.Count);
+        Assert.Equal(3, listener.Events.Count(e => e == "BeforeChunk"));
+        Assert.Equal(3, listener.Events.Count(e => e == "AfterChunk"));
+    }
+
+    [Fact]
+    public async Task ChunkListener_WriterThrows_OnChunkErrorFiredAndExceptionPropagates()
+    {
+        var listener = new RecordingChunkListener();
+        var writerException = new InvalidOperationException("writer failure");
+        var engine = new ConcurrentChunkOrientedEngine<int, int>(
+            new ListReader<int>(Enumerable.Range(1, 5)),
+            new IdentityProcessor<int>(),
+            new ThrowingWriter<int>(writerException),
+            chunkSize: 5,
+            degreeOfParallelism: 2,
+            listener: listener);
+
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            engine.ExecuteAsync(MakeContext(), CancellationToken.None));
+
+        Assert.Same(writerException, thrown);
+        Assert.Contains("OnChunkError", listener.Events);
     }
 
     [Fact]

@@ -25,26 +25,6 @@ public sealed class DeadLetterChunkListener : IChunkListener
     }
 
     /// <inheritdoc />
-    public ValueTask BeforeChunkAsync(StepExecutionContext context, CancellationToken cancellationToken) =>
-        ValueTask.CompletedTask;
-
-    /// <inheritdoc />
-    public ValueTask AfterChunkAsync(StepExecutionContext context, CancellationToken cancellationToken) =>
-        ValueTask.CompletedTask;
-
-    /// <inheritdoc />
-    public ValueTask OnChunkErrorAsync(StepExecutionContext context, Exception exception, CancellationToken cancellationToken) =>
-        ValueTask.CompletedTask;
-
-    /// <inheritdoc />
-    public ValueTask BeforeWriteAsync<TOutput>(IReadOnlyList<TOutput> items, StepExecutionContext context, CancellationToken cancellationToken) =>
-        ValueTask.CompletedTask;
-
-    /// <inheritdoc />
-    public ValueTask AfterWriteAsync<TOutput>(IReadOnlyList<TOutput> items, StepExecutionContext context, CancellationToken cancellationToken) =>
-        ValueTask.CompletedTask;
-
-    /// <inheritdoc />
     /// <remarks>
     /// <see cref="DeadLetterEntry.SkipCountAtTime"/> is exact and sequential under
     /// <see cref="Conveyor.Batch.Core.Engine.ChunkOrientedEngine{TInput,TOutput}"/>, but only a
