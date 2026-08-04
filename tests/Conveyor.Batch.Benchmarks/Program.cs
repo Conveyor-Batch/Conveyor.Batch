@@ -1,4 +1,4 @@
+using System.Reflection;
 using BenchmarkDotNet.Running;
-using Conveyor.Batch.Benchmarks;
 
-BenchmarkRunner.Run<ChunkEngineBenchmarks>();
+BenchmarkSwitcher.FromAssembly(Assembly.GetExecutingAssembly()).Run(args);
