@@ -4,14 +4,23 @@
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
     <Optimize>true</Optimize>
+    <!-- SQLitePCLRaw.lib.e_sqlite3 is a transitive dependency of EF Core SQLite with no patched
+         release; same suppression used by every other SQLite-touching project in this repo. -->
+    <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Conveyor.Batch\Conveyor.Batch.csproj" />
+    <ProjectReference Include="..\..\src\Conveyor.Batch.EntityFrameworkCore\Conveyor.Batch.EntityFrameworkCore.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
+    <!-- Pinned to the repo's existing EF Core 9.0.6 line (not the 8.* originally requested) to
+         avoid an NU1605 version-downgrade conflict with the 9.0.6 packages already referenced
+         transitively via Conveyor.Batch.EntityFrameworkCore — same reasoning already applied in
+         tests/Conveyor.Batch.IntegrationTests/Conveyor.Batch.IntegrationTests.csproj. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.6" />
   </ItemGroup>
 
 </Project>
