@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>Conveyor.Batch.Benchmarks.EfCoreItemWriterBenchmarks-20260804-211413</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.14.0, macOS 26.5.2 (25F84) [Darwin 25.5.0]
+Apple M1 Pro, 1 CPU, 10 logical and 10 physical cores
+.NET SDK 10.0.106
+  [Host]     : .NET 10.0.6 (10.0.626.17701), Arm64 RyuJIT AdvSIMD
+  Job-TELMEM : .NET 10.0.6 (10.0.626.17701), Arm64 RyuJIT AdvSIMD
+</code></pre>
+<pre><code>InvocationCount=1  UnrollFactor=1  
+</code></pre>
+
+<table>
+<thead><tr><th>Method</th><th>ChunkSize</th><th>Mean</th><th>Error</th><th>StdDev</th><th>Median</th><th>Gen0</th><th>Gen1</th><th>Allocated</th>
+</tr>
+</thead><tbody><tr><td>WriteChunk</td><td>100</td><td>2.960 ms</td><td>0.1151 ms</td><td>0.3358 ms</td><td>2.949 ms</td><td>-</td><td>-</td><td>741.89 KB</td>
+</tr><tr><td>WriteChunk</td><td>1000</td><td>13.301 ms</td><td>2.5930 ms</td><td>7.6049 ms</td><td>8.416 ms</td><td>1000.0000</td><td>-</td><td>6944.44 KB</td>
+</tr><tr><td>WriteChunk</td><td>5000</td><td>37.263 ms</td><td>0.6087 ms</td><td>0.5396 ms</td><td>37.186 ms</td><td>5000.0000</td><td>1000.0000</td><td>34706.45 KB</td>
+</tr></tbody></table>
+</body>
+</html>
